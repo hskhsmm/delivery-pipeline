@@ -1,0 +1,51 @@
+plugins {
+    id 'groovy'
+}
+
+group = 'dev.delivery'
+version = '0.1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Compile against the Jenkins-compatible Groovy version, not Gradle's own Groovy.
+    implementation 'org.codehaus.groovy:groovy-all:2.4.21'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+sourceSets {
+    main {
+        groovy.srcDirs = ['src', 'vars']
+        java.srcDirs = []
+    }
+    test {
+        groovy.srcDirs = ['test']
+        java.srcDirs = []
+    }
+}
+
+dependencyLocking {
+    lockAllConfigurations()
+}
+
+tasks.withType(GroovyCompile).configureEach {
+    groovyOptions.encoding = 'UTF-8'
+}
+
+tasks.named('test', Test) {
+    useJUnit()
+    failOnNoDiscoveredTests = true
+    testLogging {
+        events 'failed', 'skipped'
+    }
+}
