@@ -1,0 +1,8 @@
+// Use @main during initial setup; pin a tag or commit for regular service builds.
+@Library('delivery-pipeline@main') _
+
+servicePipeline(
+    serviceName: 'payments-api',
+    agentLabel: 'java',
+    timeoutMinutes: 30
+)
