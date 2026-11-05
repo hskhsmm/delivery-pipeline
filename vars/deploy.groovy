@@ -6,7 +6,7 @@ import dev.delivery.ServiceConfig
 /** 서비스 저장소의 jenkins.yml을 읽어 공통 Gradle 빌드를 실행하는 공개 진입점. */
 def call(Map options = [:]) {
     // 파일을 읽기 전에 필요한 에이전트·경로 설정만 먼저 검증한다.
-    DeployOptions bootstrap = new DeployOptions(options)
+    DeployOptions bootstrap = DeployOptions.fromOptions(options)
 
     node(bootstrap.agentLabel) {
         ServiceConfig config

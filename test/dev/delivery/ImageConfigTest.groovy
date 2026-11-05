@@ -12,7 +12,7 @@ class ImageConfigTest {
         ], 'java').image
         assertEquals('docker.io/team/my-api', image.repository)
         assertEquals('hub', image.credentialsId)
-        assertEquals(image.repository, new ImageConfig([
+        assertEquals(image.repository, ImageConfig.fromOptions([
             repository: image.repository, credentialsId: 'hub'
         ]).repository)
     }

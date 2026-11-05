@@ -1,9 +1,6 @@
 package dev.delivery
 
-import groovy.transform.CompileStatic
-
 /** Jenkins 스텝 없이 검증한 서비스 설정. 체크포인트에 보관할 수 있도록 직렬화한다. */
-@CompileStatic
 final class ServiceConfig implements Serializable {
     private static final long serialVersionUID = 1L
     private static final Set<String> KEYS = ['serviceName', 'agentLabel', 'timeoutMinutes', 'buildEnv'] as Set<String>
@@ -14,16 +11,25 @@ final class ServiceConfig implements Serializable {
     final Map<String, String> buildEnv
     final ImageConfig image
 
-    ServiceConfig(Map<String, ?> options, ImageConfig image = null) {
+    ServiceConfig(String serviceName, String agentLabel, int timeoutMinutes, Map<String, String> buildEnv, ImageConfig image) {
+        this.serviceName = serviceName
+        this.agentLabel = agentLabel
+        this.timeoutMinutes = timeoutMinutes
+        this.buildEnv = buildEnv
+        this.image = image
+    }
+
+    // Jenkins는 생성자 본문을 CPS로 변환하지 않으므로 검증은 생성 전에 끝낸다.
+    static ServiceConfig fromOptions(Map<String, ?> options, ImageConfig image = null) {
         ConfigChecks.knownKeys(options, KEYS)
-        this.serviceName = ConfigChecks.text(options, 'serviceName', null)
+        String serviceName = ConfigChecks.text(options, 'serviceName', null)
         if (!(serviceName ==~ /[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?/)) {
             throw new IllegalArgumentException('serviceName must be a lowercase DNS label of 1–63 characters')
         }
-        this.agentLabel = ConfigChecks.text(options, 'agentLabel', 'java')
-        this.timeoutMinutes = ConfigChecks.minutes(options, 'timeoutMinutes', 30)
-        this.buildEnv = environment(options.containsKey('buildEnv') ? options.get('buildEnv') : [:])
-        this.image = image
+        String agentLabel = ConfigChecks.text(options, 'agentLabel', 'java')
+        int timeoutMinutes = ConfigChecks.minutes(options, 'timeoutMinutes', 30)
+        Map<String, String> buildEnv = environment(options.containsKey('buildEnv') ? options.get('buildEnv') : [:])
+        return new ServiceConfig(serviceName, agentLabel, timeoutMinutes, buildEnv, image)
     }
 
     static ServiceConfig fromYaml(Object document, String agentLabel) {
@@ -43,8 +49,8 @@ final class ServiceConfig implements Serializable {
             normalized.put((String) entry.getKey(), entry.getValue())
         }
         normalized.put('agentLabel', agentLabel)
-        ImageConfig image = normalized.containsKey('image') ? new ImageConfig(normalized.remove('image')) : null
-        return new ServiceConfig(normalized, image)
+        ImageConfig image = normalized.containsKey('image') ? ImageConfig.fromOptions(normalized.remove('image')) : null
+        return fromOptions(normalized, image)
     }
 
     List<String> environmentOverrides() {

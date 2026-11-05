@@ -6,7 +6,7 @@ import static org.junit.Assert.*
 class DeployOptionsTest {
     @Test
     void providesBootstrapDefaults() {
-        DeployOptions options = new DeployOptions([:])
+        DeployOptions options = DeployOptions.fromOptions([:])
         assertEquals('java', options.agentLabel)
         assertEquals('jenkins.yml', options.configFile)
         assertEquals(10, options.checkoutTimeoutMinutes)
@@ -14,7 +14,7 @@ class DeployOptionsTest {
 
     @Test
     void acceptsRepositoryRelativeConfigAndAgentLabelExpression() {
-        DeployOptions options = new DeployOptions([
+        DeployOptions options = DeployOptions.fromOptions([
             configFile: '.ci/jenkins.yaml', agentLabel: 'java21 && linux', checkoutTimeoutMinutes: 15
         ])
         assertEquals('.ci/jenkins.yaml', options.configFile)
@@ -46,7 +46,7 @@ class DeployOptionsTest {
 
     private static void rejects(Map options) {
         try {
-            new DeployOptions(options)
+            DeployOptions.fromOptions(options)
             fail('Expected invalid deploy options to fail')
         } catch (IllegalArgumentException expected) {
             assertFalse(expected.message.isEmpty())

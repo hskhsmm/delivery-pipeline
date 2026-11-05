@@ -1,9 +1,6 @@
 package dev.delivery
 
-import groovy.transform.CompileStatic
-
 /** 두 진입점이 동일한 타입·기본값 규칙을 사용하도록 순수 검증만 모은다. */
-@CompileStatic
 final class ConfigChecks {
     static void knownKeys(Map<?, ?> options, Set<String> allowed) {
         if (options == null) {

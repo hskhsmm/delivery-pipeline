@@ -6,7 +6,7 @@ import static org.junit.Assert.*
 class ServiceConfigTest {
     @Test
     void appliesDefaults() {
-        ServiceConfig config = new ServiceConfig([serviceName: 'orders-api'])
+        ServiceConfig config = ServiceConfig.fromOptions([serviceName: 'orders-api'])
         assertEquals('orders-api', config.serviceName)
         assertEquals('java', config.agentLabel)
         assertEquals(30, config.timeoutMinutes)
@@ -14,7 +14,7 @@ class ServiceConfigTest {
 
     @Test
     void acceptsExplicitAgentSettings() {
-        ServiceConfig config = new ServiceConfig([
+        ServiceConfig config = ServiceConfig.fromOptions([
             serviceName: 'payments-api',
             agentLabel: 'java21 && linux', timeoutMinutes: 60
         ])
@@ -45,8 +45,8 @@ class ServiceConfigTest {
 
     @Test
     void acceptsTimeoutBoundaryValues() {
-        assertEquals(1, new ServiceConfig([serviceName: 'api', timeoutMinutes: 1L]).timeoutMinutes)
-        assertEquals(120, new ServiceConfig([serviceName: 'api', timeoutMinutes: 120]).timeoutMinutes)
+        assertEquals(1, ServiceConfig.fromOptions([serviceName: 'api', timeoutMinutes: 1L]).timeoutMinutes)
+        assertEquals(120, ServiceConfig.fromOptions([serviceName: 'api', timeoutMinutes: 120]).timeoutMinutes)
     }
 
     @Test
@@ -57,7 +57,7 @@ class ServiceConfigTest {
 
     @Test
     void configurationSurvivesSerializationForPipelineState() {
-        ServiceConfig original = new ServiceConfig([
+        ServiceConfig original = ServiceConfig.fromOptions([
             serviceName: 'api', agentLabel: 'java21', buildEnv: [JAVA_TOOL_OPTIONS: '-Xmx1g']
         ])
         ByteArrayOutputStream bytes = new ByteArrayOutputStream()
@@ -105,7 +105,7 @@ class ServiceConfigTest {
             rejects([serviceName: 'api', buildEnv: it])
         }
         try {
-            new ServiceConfig([serviceName: 'api', buildEnv: [TOKEN: ['private-value']]])
+            ServiceConfig.fromOptions([serviceName: 'api', buildEnv: [TOKEN: ['private-value']]])
             fail('Expected invalid environment value to fail')
         } catch (IllegalArgumentException expected) {
             assertFalse(expected.message.contains('private-value'))
@@ -114,7 +114,7 @@ class ServiceConfigTest {
 
     @Test
     void environmentSnapshotIsImmutableAndPreservesStringValues() {
-        ServiceConfig config = new ServiceConfig([
+        ServiceConfig config = ServiceConfig.fromOptions([
             serviceName: 'api', buildEnv: [EMPTY: '', OPTIONS: '-Dname=api $(echo literal)']
         ])
         assertEquals(['EMPTY=', 'OPTIONS=-Dname=api $(echo literal)'], config.environmentOverrides())
@@ -133,7 +133,7 @@ class ServiceConfigTest {
 
     private static void rejects(Map options) {
         try {
-            new ServiceConfig(options)
+            ServiceConfig.fromOptions(options)
             fail('Expected invalid configuration to fail')
         } catch (IllegalArgumentException expected) {
             assertFalse(expected.message.isEmpty())
