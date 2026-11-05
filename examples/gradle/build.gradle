@@ -1,0 +1,14 @@
+plugins {
+    id 'java'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.named('jar') {
+    archiveFileName = 'service.jar'
+    manifest.attributes('Main-Class': 'example.HealthServer')
+}

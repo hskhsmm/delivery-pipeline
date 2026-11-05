@@ -10,5 +10,5 @@ and the wrapper configuration to the service repository.
 Unknown settings fail before agent allocation. Failed builds stop the pipeline.
 buildEnv applies only to the Verify stage and does not persist to other stages.
 
-v0.1 implements Checkout and Verify only. Image publication and GitOps deployment
-are planned features; this library does not deploy a service yet.
+servicePipeline implements Checkout and Verify. Use deploy() with an image
+mapping in jenkins.yml for Docker Hub image publication.

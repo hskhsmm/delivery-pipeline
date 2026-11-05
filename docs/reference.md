@@ -38,17 +38,24 @@ buildEnv:
 | `serviceName` | String | 필수 | 소문자 영숫자·하이픈, 1–63자, 시작과 끝은 영숫자 |
 | `timeoutMinutes` | Integer 또는 Long | `30` | 1–120분. Configure 이후 Verify에 적용 |
 | `buildEnv` | Map<String, String> | 빈 Map | 환경변수 이름은 영문자·숫자·밑줄, 첫 글자는 영문자 또는 밑줄 |
+| `image` | Map | 생략 | 설정하면 Verify 성공 후 Docker Hub로 이미지 발행 |
 
 환경변수 값은 문자열만 받습니다. YAML의 숫자와 boolean은 인용하고, `timeoutMinutes`는 숫자로 씁니다.
 `buildEnv`에는 빈 문자열도 허용하지만 null과 NUL 문자는 거부합니다.
 루트가 빈 값·리스트·스칼라인 YAML, 여러 문서, 알 수 없는 키와 YAML 안의 `agentLabel`도 거부합니다.
-현재 `image`, `gitops`, `argocd` 등의 배포 설정은 지원하지 않습니다.
+GitOps와 Argo CD 연결은 로드맵에 있습니다.
+
+`image`를 쓰면 `repository`와 `credentialsId`가 모두 필요합니다.
+`repository`는 Docker Hub의 `namespace/repository` 또는 `docker.io/namespace/repository` 형식입니다.
+`credentialsId`는 Jenkins의 Username with password 자격증명 ID입니다.
+설정 예제와 에이전트 요구사항은 [이미지 발행 가이드](image-publishing.md)에 있습니다.
 
 ### 단계와 실패 처리
 
 1. `Checkout`: 워크스페이스를 정리하고 서비스 잡의 `scm`을 체크아웃합니다.
 2. `Configure`: `fileExists` 확인 후 `readYaml`로 읽고 서비스 설정을 검증합니다.
 3. `Verify`: `withEnv` 범위에서 `./gradlew --no-daemon build`를 실행합니다.
+4. `Publish Image`: `image` 설정이 있을 때만 Dockerfile을 빌드·푸시하고 digest를 보관합니다.
 
 `readYaml`은 Pipeline Utility Steps 플러그인 스텝입니다. 파서의 code-point 제한은 65,536,
 컬렉션 별칭 제한은 20으로 전달합니다. Jenkins 관리자가 더 낮은 상한을 설정했다면 실행 오류가 날 수 있습니다.
@@ -57,7 +64,7 @@ buildEnv:
 
 `buildEnv`는 Verify의 프로세스에만 적용하며 Kubernetes 애플리케이션의 환경변수를 설정하지 않습니다.
 라이브러리는 값을 직접 로그로 출력하지 않지만 Gradle·JVM·테스트가 값을 출력할 수 있습니다.
-일반 빌드 옵션에 사용하며 비밀값용 Credentials 연결과 마스킹은 현재 구현 범위에 포함하지 않습니다.
+일반 빌드 옵션에 사용합니다. Docker Hub 자격증명은 Publish Image 단계의 Credentials Binding으로 전달합니다.
 
 ## servicePipeline(options)
 

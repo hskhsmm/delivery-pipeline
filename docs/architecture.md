@@ -19,9 +19,10 @@ Kubernetes를 사용한다는 이유로 Go를 추가하거나 CLI를 위해 Type
 - `DeployOptions`: 파일을 읽기 전에 필요한 에이전트·경로·체크아웃 timeout을 검증합니다.
 - `ServiceConfig`: YAML 루트와 서비스 설정을 검증하고 환경변수의 불변 복사본을 만듭니다.
 - `ConfigChecks`: 두 설정 클래스의 공통 문자열·정수·알 수 없는 키 검증입니다.
-- `vars/deploy.groovy`: Checkout → Configure → Verify를 조합하는 기본 진입점입니다.
+- `vars/deploy.groovy`: Checkout → Configure → Verify → 선택적 Publish Image를 조합합니다.
 - `vars/servicePipeline.groovy`: Map을 전달하는 기존 호출을 유지합니다.
 - `GradleBuild`: 두 진입점이 공유하는 Verify와 `withEnv` 범위를 실행합니다.
+- `ImageConfig`와 `ImagePublisher`: Docker Hub 설정을 검증하고 Buildx의 발행 digest를 기록합니다.
 - 테스트 하네스: 스텝을 기록하고 YAML을 실제 파싱하여 순서와 실패 전파를 확인합니다.
 
 설정을 읽으려면 체크아웃할 에이전트가 먼저 필요합니다. 에이전트 라벨은 `deploy(...)`에서 지정하며,
@@ -36,7 +37,7 @@ YAML에 뒤늦게 지정한 라벨을 무시하거나 다른 노드를 중첩 �
 단위 테스트의 SnakeYAML은 test 의존성이고 실제 Jenkins에서는 Pipeline Utility Steps의 `readYaml`을 사용합니다.
 실제 플러그인과 에이전트에서의 통합 검증은 별도로 진행해야 합니다.
 
-## 목표 배포 흐름 — 미구현
+## GitOps 연결 계획
 
 ```text
 서비스 코드 변경

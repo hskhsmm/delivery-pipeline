@@ -15,10 +15,12 @@
 
 ## 2차: 컨테이너 이미지 발행
 
-- [ ] Dockerfile 기반 빌드와 레지스트리 push
-- [ ] 커밋 SHA와 발행된 이미지 digest를 연결한 release 메타데이터
-- [ ] 서비스별 레지스트리·자격증명 설정
-- [ ] 테스트 실패 시 이미지 발행이 실행되지 않는 검증
+- [x] Dockerfile 기반 Docker Hub 이미지 발행
+- [x] 커밋 SHA와 발행된 이미지 digest를 연결한 아티팩트
+- [x] 서비스별 Docker Hub 저장소·Jenkins 자격증명 설정
+- [x] 검증 실패 시 이미지 발행을 건너뛰고 발행 실패 시 아티팩트를 남기지 않는 테스트
+- [ ] 실제 Jenkins에서 Java 샘플 발행 후 digest로 pull·실행
+- [ ] Kotlin 서비스에서 같은 호출 방식으로 재사용 검증
 
 완료 기준: sandbox에 사용할 실제 이미지를 발행하고 digest로 다시 지정할 수 있습니다.
 

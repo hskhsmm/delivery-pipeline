@@ -8,3 +8,8 @@ timeoutMinutes: 30
 buildEnv:
   JAVA_TOOL_OPTIONS: '-Xmx1g'
   CI: 'true'
+
+# 발행을 켤 때 주석을 풀고 본인의 Docker Hub 저장소와 Jenkins Credentials ID를 지정한다.
+# image:
+#   repository: your-namespace/delivery-demo
+#   credentialsId: dockerhub-publisher

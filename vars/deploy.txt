@@ -13,4 +13,7 @@ Stages: Checkout → Configure → Verify. The configuration timeout covers Chec
 and Configure; the YAML timeout covers Verify. Agent queue time is not included.
 
 Missing or invalid configuration stops before Gradle execution.
-Image publication and actual deployment are not implemented yet.
+Optional YAML image mapping: repository (Docker Hub namespace/repository)
+and credentialsId (Jenkins Username with password). A successful Verify is
+followed by Publish Image and a published-image.json build artifact.
+GitOps deployment is a later milestone.
