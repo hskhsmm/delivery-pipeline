@@ -12,8 +12,9 @@ final class ServiceConfig implements Serializable {
     final String agentLabel
     final int timeoutMinutes
     final Map<String, String> buildEnv
+    final ImageConfig image
 
-    ServiceConfig(Map<String, ?> options) {
+    ServiceConfig(Map<String, ?> options, ImageConfig image = null) {
         ConfigChecks.knownKeys(options, KEYS)
         this.serviceName = ConfigChecks.text(options, 'serviceName', null)
         if (!(serviceName ==~ /[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?/)) {
@@ -22,6 +23,7 @@ final class ServiceConfig implements Serializable {
         this.agentLabel = ConfigChecks.text(options, 'agentLabel', 'java')
         this.timeoutMinutes = ConfigChecks.minutes(options, 'timeoutMinutes', 30)
         this.buildEnv = environment(options.containsKey('buildEnv') ? options.get('buildEnv') : [:])
+        this.image = image
     }
 
     static ServiceConfig fromYaml(Object document, String agentLabel) {
@@ -41,7 +43,8 @@ final class ServiceConfig implements Serializable {
             normalized.put((String) entry.getKey(), entry.getValue())
         }
         normalized.put('agentLabel', agentLabel)
-        return new ServiceConfig(normalized)
+        ImageConfig image = normalized.containsKey('image') ? new ImageConfig(normalized.remove('image')) : null
+        return new ServiceConfig(normalized, image)
     }
 
     List<String> environmentOverrides() {
