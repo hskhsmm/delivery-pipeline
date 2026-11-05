@@ -1,0 +1,16 @@
+deploy() reads jenkins.yml from the checked-out service repository and runs Gradle.
+
+Call options: agentLabel (default java), configFile (default jenkins.yml),
+checkoutTimeoutMinutes (integer 1–120, default 10).
+The agent must be selected before reading YAML; agentLabel does not belong in YAML.
+
+YAML: serviceName (required), timeoutMinutes (integer 1–120, default 30),
+buildEnv (optional mapping of environment variable names to string values).
+Quote numeric and boolean environment values. buildEnv applies only to Verify.
+
+Requires the Jenkins Pipeline Utility Steps plugin for readYaml.
+Stages: Checkout → Configure → Verify. The configuration timeout covers Checkout
+and Configure; the YAML timeout covers Verify. Agent queue time is not included.
+
+Missing or invalid configuration stops before Gradle execution.
+Image publication and actual deployment are not implemented yet.

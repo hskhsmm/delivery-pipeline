@@ -3,7 +3,7 @@
 ## 목표
 
 새 서비스에서 공통 빌드·배포 흐름을 작은 Jenkinsfile로 재사용합니다.
-공통 정책은 라이브러리에, 서비스별 설정은 서비스 저장소에 둡니다.
+공통 정책은 라이브러리에, 서비스별 설정은 서비스 저장소의 `jenkins.yml`에 둡니다.
 공통화된 파이프라인과 모든 서비스를 한 번에 갱신하는 것은 별개입니다.
 서비스별로 라이브러리 버전을 고정하고 검증한 변경부터 도입합니다.
 
@@ -16,15 +16,25 @@ Kubernetes를 사용한다는 이유로 Go를 추가하거나 CLI를 위해 Type
 
 ## 코드 경계
 
-- `ServiceConfig`: 입력 검증. Jenkins나 네트워크 없이 테스트할 수 있습니다.
-- `vars/servicePipeline.groovy`: Jenkins 스텝을 조합합니다.
-- 테스트 하네스: 스텝 호출을 기록하고 실패를 주입하여 실행 순서와 중단을 확인합니다.
+- `DeployOptions`: 파일을 읽기 전에 필요한 에이전트·경로·체크아웃 timeout을 검증합니다.
+- `ServiceConfig`: YAML 루트와 서비스 설정을 검증하고 환경변수의 불변 복사본을 만듭니다.
+- `ConfigChecks`: 두 설정 클래스의 공통 문자열·정수·알 수 없는 키 검증입니다.
+- `vars/deploy.groovy`: Checkout → Configure → Verify를 조합하는 기본 진입점입니다.
+- `vars/servicePipeline.groovy`: Map을 전달하는 기존 호출을 유지합니다.
+- `GradleBuild`: 두 진입점이 공유하는 Verify와 `withEnv` 범위를 실행합니다.
+- 테스트 하네스: 스텝을 기록하고 YAML을 실제 파싱하여 순서와 실패 전파를 확인합니다.
 
-설정은 `Serializable`로 유지합니다. 현재 직렬화 테스트는 일반 Java 직렬화만 확인하며
-Jenkins CPS 체크포인트와 재개를 재현하지는 않습니다.
+설정을 읽으려면 체크아웃할 에이전트가 먼저 필요합니다. 에이전트 라벨은 `deploy(...)`에서 지정하며,
+YAML에 뒤늦게 지정한 라벨을 무시하거나 다른 노드를 중첩 할당하지 않고 명시적으로 거부합니다.
+같은 워크스페이스에서 한 번만 체크아웃하여 설정과 빌드 소스가 다른 체크아웃에서 읽히지 않게 합니다.
 
-서비스와 라이브러리 개발 환경 모두 Gradle Wrapper를 사용합니다.
-빌드 명령은 `./gradlew --no-daemon build`로 통일하고 빌드 도구 선택 옵션은 두지 않습니다.
+체크아웃과 YAML 읽기는 기본 10분, 이후 Verify는 YAML에서 정한 기본 30분 timeout을 사용합니다.
+환경변수는 `withEnv`로 Verify에만 적용하고 전역 `env`를 직접 수정하지 않습니다.
+설정 객체는 직렬화 가능하게 유지하지만 일반 Java 직렬화 테스트가 Jenkins CPS 재개를 검증하지는 않습니다.
+
+서비스와 라이브러리 개발 환경 모두 `./gradlew --no-daemon build`를 사용합니다.
+단위 테스트의 SnakeYAML은 test 의존성이고 실제 Jenkins에서는 Pipeline Utility Steps의 `readYaml`을 사용합니다.
+실제 플러그인과 에이전트에서의 통합 검증은 별도로 진행해야 합니다.
 
 ## 목표 배포 흐름 — 미구현
 

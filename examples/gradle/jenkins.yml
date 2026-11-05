@@ -1,0 +1,10 @@
+# 서비스 저장소 루트의 Jenkinsfile과 함께 둔다.
+serviceName: payments-api
+
+# Configure가 끝난 뒤 실행하는 Gradle 빌드의 제한 시간이다.
+timeoutMinutes: 30
+
+# Verify에서 실행하는 프로세스에만 전달한다. 숫자·boolean도 문자열로 인용한다.
+buildEnv:
+  JAVA_TOOL_OPTIONS: '-Xmx1g'
+  CI: 'true'

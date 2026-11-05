@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    // Compile against the Jenkins-compatible Groovy version, not Gradle's own Groovy.
+    // Gradle 내부 Groovy 대신 Jenkins와 호환되는 버전으로 라이브러리를 컴파일한다.
     implementation 'org.codehaus.groovy:groovy-all:2.4.21'
     testImplementation 'junit:junit:4.13.2'
     // 테스트 하네스에서 YAML을 실제 파싱한다. Jenkins에서는 readYaml 플러그인을 사용한다.
@@ -26,6 +26,7 @@ java {
 }
 
 sourceSets {
+    // Jenkins Shared Library 표준 경로를 유지하면서 Gradle의 소스 경로만 맞춘다.
     main {
         groovy.srcDirs = ['src', 'vars']
         java.srcDirs = []
@@ -37,6 +38,7 @@ sourceSets {
 }
 
 dependencyLocking {
+    // 로컬과 CI가 같은 의존성 버전을 사용하도록 간접 의존성까지 고정한다.
     lockAllConfigurations()
 }
 

@@ -6,8 +6,10 @@
 - [x] Gradle 서비스의 Checkout / Verify
 - [x] 설정 검증, 실패 전파, 단위 테스트
 - [x] Gradle Wrapper와 GitHub Actions CI
-- [x] 서비스별 Jenkinsfile 예제와 API 문서
-- [ ] 실제 Jenkins에서 Gradle 서비스 실행
+- [x] `deploy()`가 서비스 저장소의 `jenkins.yml`을 읽고 Gradle Verify 실행
+- [x] YAML 검증, 빌드 환경변수 범위, 파싱 오류·실패 전파 테스트
+- [x] 서비스별 Jenkinsfile·jenkins.yml 예제와 API 문서
+- [ ] 실제 Jenkins와 Pipeline Utility Steps 플러그인에서 YAML 기반 Gradle 서비스 실행
 
 첫 실제 사용 결과를 기준으로 에이전트 라벨과 빌드 옵션의 기본값을 조정합니다.
 

@@ -2,11 +2,13 @@ servicePipeline builds and tests a Java service with its committed Gradle wrappe
 
 Required: serviceName.
 Optional: agentLabel (default java),
-timeoutMinutes (integer 1–120, default 30).
+timeoutMinutes (integer 1–120, default 30), buildEnv (mapping of string values).
+For file-based configuration, use deploy() with jenkins.yml instead.
 
 The Jenkins agent needs the service's JDK. Commit an executable gradlew
 and the wrapper configuration to the service repository.
 Unknown settings fail before agent allocation. Failed builds stop the pipeline.
+buildEnv applies only to the Verify stage and does not persist to other stages.
 
 v0.1 implements Checkout and Verify only. Image publication and GitOps deployment
 are planned features; this library does not deploy a service yet.
