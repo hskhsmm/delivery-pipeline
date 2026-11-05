@@ -57,7 +57,9 @@ class ServiceConfigTest {
 
     @Test
     void configurationSurvivesSerializationForPipelineState() {
-        ServiceConfig original = new ServiceConfig([serviceName: 'api', agentLabel: 'java21'])
+        ServiceConfig original = new ServiceConfig([
+            serviceName: 'api', agentLabel: 'java21', buildEnv: [JAVA_TOOL_OPTIONS: '-Xmx1g']
+        ])
         ByteArrayOutputStream bytes = new ByteArrayOutputStream()
         new ObjectOutputStream(bytes).withCloseable { it.writeObject(original) }
         ServiceConfig restored = (ServiceConfig) new ObjectInputStream(
@@ -65,6 +67,68 @@ class ServiceConfigTest {
         ).readObject()
         assertEquals(original.serviceName, restored.serviceName)
         assertEquals(original.agentLabel, restored.agentLabel)
+        assertEquals(original.buildEnv, restored.buildEnv)
+    }
+
+    @Test
+    void createsServiceConfigurationFromYamlWithoutMutatingInput() {
+        Map document = [serviceName: 'api', buildEnv: [CI: 'true']]
+        ServiceConfig config = ServiceConfig.fromYaml(document, 'java21')
+        assertEquals('java21', config.agentLabel)
+        assertEquals(['CI=true'], config.environmentOverrides())
+        assertFalse(document.containsKey('agentLabel'))
+        document.buildEnv.CI = 'changed'
+        assertEquals('true', config.buildEnv.CI)
+    }
+
+    @Test
+    void rejectsNonMappingYamlAndAgentSelectionInsideYaml() {
+        [null, [], 'api', 123, [[serviceName: 'api'], [serviceName: 'other']]].each { document ->
+            try {
+                ServiceConfig.fromYaml(document, 'java')
+                fail('Expected YAML root validation to fail')
+            } catch (IllegalArgumentException expected) {
+                assertTrue(expected.message.contains('mapping'))
+            }
+        }
+        try {
+            ServiceConfig.fromYaml([serviceName: 'api', agentLabel: 'another-agent'], 'java')
+            fail('Expected late agent selection to fail')
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.message.contains('deploy('))
+        }
+    }
+
+    @Test
+    void rejectsInvalidEnvironmentNamesTypesAndNulValuesWithoutLeakingValues() {
+        [null, [], 'CI=true', [BAD: true], [BAD: 123], [BAD: null], ['BAD-NAME': 'x'], [BAD: 'private-value' + ((char) 0)]].each {
+            rejects([serviceName: 'api', buildEnv: it])
+        }
+        try {
+            new ServiceConfig([serviceName: 'api', buildEnv: [TOKEN: ['private-value']]])
+            fail('Expected invalid environment value to fail')
+        } catch (IllegalArgumentException expected) {
+            assertFalse(expected.message.contains('private-value'))
+        }
+    }
+
+    @Test
+    void environmentSnapshotIsImmutableAndPreservesStringValues() {
+        ServiceConfig config = new ServiceConfig([
+            serviceName: 'api', buildEnv: [EMPTY: '', OPTIONS: '-Dname=api $(echo literal)']
+        ])
+        assertEquals(['EMPTY=', 'OPTIONS=-Dname=api $(echo literal)'], config.environmentOverrides())
+        try {
+            config.buildEnv.put('OTHER', 'value')
+            fail('Expected immutable environment settings')
+        } catch (UnsupportedOperationException expected) {
+            assertEquals(2, config.buildEnv.size())
+        }
+    }
+
+    @Test
+    void rejectsNonStringConfigurationKeys() {
+        rejects([(1): 'value', serviceName: 'api'])
     }
 
     private static void rejects(Map options) {
