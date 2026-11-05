@@ -1,0 +1,6 @@
+serviceName: orders-api
+timeoutMinutes: 45
+buildEnv:
+  JAVA_TOOL_OPTIONS: '-Xmx1g'
+  CI: 'true'
+  PORT: '8080'

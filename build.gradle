@@ -13,6 +13,8 @@ dependencies {
     // Compile against the Jenkins-compatible Groovy version, not Gradle's own Groovy.
     implementation 'org.codehaus.groovy:groovy-all:2.4.21'
     testImplementation 'junit:junit:4.13.2'
+    // 테스트 하네스에서 YAML을 실제 파싱한다. Jenkins에서는 readYaml 플러그인을 사용한다.
+    testImplementation 'org.yaml:snakeyaml:2.5'
 }
 
 java {

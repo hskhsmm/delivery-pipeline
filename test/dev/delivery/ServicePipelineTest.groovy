@@ -3,7 +3,7 @@ package dev.delivery
 import org.junit.Test
 import static org.junit.Assert.*
 
-/** A small step harness: no Jenkins server, shell execution, or network access. */
+/** 기존 Map 호출도 deploy()와 같은 Verify 구현을 사용하는지 검증한다. */
 class ServicePipelineTest {
     @Test
     void checksOutBeforeRunningGradleWithinTimeout() {
@@ -11,7 +11,7 @@ class ServicePipelineTest {
         Script pipeline = loadPipeline(events)
         pipeline.call([serviceName: 'orders-api'])
 
-        assertEquals(['node', 'timeout', 'stage', 'clean', 'checkout', 'stage', 'echo', 'sh'], events*.type)
+        assertEquals(['node', 'timeout', 'stage', 'clean', 'checkout', 'stage', 'withEnv', 'echo', 'sh'], events*.type)
         assertEquals('java', events[0].label)
         assertEquals([time: 30, unit: 'MINUTES'], events[1].options)
         assertEquals(['Checkout', 'Verify'], events.findAll { it.type == 'stage' }*.name)
@@ -62,31 +62,10 @@ class ServicePipelineTest {
     }
 
     private Script loadPipeline(List events, boolean failCheckout = false, boolean failBuild = false) {
-        Binding binding = new Binding([
-            scm: [name: 'service-repository'],
-            node: { String label, Closure body ->
-                events << [type: 'node', label: label]
-                body.call()
-            },
-            timeout: { Map options, Closure body ->
-                events << [type: 'timeout', options: options]
-                body.call()
-            },
-            stage: { String name, Closure body ->
-                events << [type: 'stage', name: name]
-                body.call()
-            },
-            deleteDir: { -> events << [type: 'clean'] },
-            checkout: { Object scm ->
-                events << [type: 'checkout', scm: scm]
-                if (failCheckout) throw new IllegalStateException('checkout failed')
-            },
-            echo: { String message -> events << [type: 'echo', message: message] },
-            sh: { Map options ->
-                events << [type: 'sh', options: options]
-                if (failBuild) throw new IllegalStateException('build failed')
-            }
-        ])
-        return new GroovyShell(getClass().classLoader, binding).parse(new File('vars/servicePipeline.groovy'))
+        PipelineHarness harness = new PipelineHarness()
+        harness.events = events
+        harness.failCheckout = failCheckout
+        harness.failBuild = failBuild
+        return harness.load('servicePipeline')
     }
 }

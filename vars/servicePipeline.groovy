@@ -1,6 +1,7 @@
+import dev.delivery.GradleBuild
 import dev.delivery.ServiceConfig
 
-/** Public entry point. Validation finishes before allocating a Jenkins agent. */
+/** Map을 직접 전달하는 기존 진입점. YAML 기반 deploy()와 동일한 빌드 단계를 사용한다. */
 def call(Map options = [:]) {
     ServiceConfig config = new ServiceConfig(options)
 
@@ -10,10 +11,7 @@ def call(Map options = [:]) {
                 deleteDir()
                 checkout scm
             }
-            stage('Verify') {
-                echo "Verifying ${config.serviceName} with Gradle"
-                sh(label: "Build and test ${config.serviceName}", script: './gradlew --no-daemon build')
-            }
+            new GradleBuild(this).run(config)
         }
     }
 }
