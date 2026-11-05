@@ -41,7 +41,8 @@ final class ServiceConfig implements Serializable {
         if (raw.containsKey('agentLabel')) {
             throw new IllegalArgumentException('Set agentLabel in deploy(...), not YAML: the agent is allocated before reading the file')
         }
-        Map<String, Object> normalized = new LinkedHashMap<String, Object>()
+        // Jenkins 샌드박스에서도 기본 허용되는 Groovy 컬렉션 리터럴을 사용한다.
+        Map<String, Object> normalized = [:]
         for (Map.Entry<?, ?> entry : raw.entrySet()) {
             if (!(entry.getKey() instanceof String)) {
                 throw new IllegalArgumentException('Configuration keys must be strings')
@@ -54,7 +55,7 @@ final class ServiceConfig implements Serializable {
     }
 
     List<String> environmentOverrides() {
-        List<String> result = new ArrayList<String>()
+        List<String> result = []
         for (Map.Entry<String, String> entry : buildEnv.entrySet()) {
             result.add(entry.getKey() + '=' + entry.getValue())
         }
@@ -65,7 +66,7 @@ final class ServiceConfig implements Serializable {
         if (!(raw instanceof Map)) {
             throw new IllegalArgumentException('buildEnv must be a mapping of environment variable names to strings')
         }
-        Map<String, String> result = new LinkedHashMap<String, String>()
+        Map<String, String> result = [:]
         for (Map.Entry<?, ?> entry : ((Map<?, ?>) raw).entrySet()) {
             Object key = entry.getKey()
             Object value = entry.getValue()
