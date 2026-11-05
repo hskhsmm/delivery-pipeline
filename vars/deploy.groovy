@@ -1,5 +1,6 @@
 import dev.delivery.DeployOptions
 import dev.delivery.GradleBuild
+import dev.delivery.ImagePublisher
 import dev.delivery.ServiceConfig
 
 /** 서비스 저장소의 jenkins.yml을 읽어 공통 Gradle 빌드를 실행하는 공개 진입점. */
@@ -9,11 +10,12 @@ def call(Map options = [:]) {
 
     node(bootstrap.agentLabel) {
         ServiceConfig config
+        String revision
         timeout(time: bootstrap.checkoutTimeoutMinutes, unit: 'MINUTES') {
             stage('Checkout') {
                 // 이전 빌드의 설정을 재사용하지 않고 이번 SCM 체크아웃에서 다시 읽는다.
                 deleteDir()
-                checkout scm
+                revision = checkout(scm)?.GIT_COMMIT
             }
             stage('Configure') {
                 if (!fileExists(bootstrap.configFile)) {
@@ -33,6 +35,9 @@ def call(Map options = [:]) {
         // YAML의 timeout은 설정을 읽은 뒤 실행하는 빌드에만 적용한다.
         timeout(time: config.timeoutMinutes, unit: 'MINUTES') {
             new GradleBuild(this).run(config)
+        }
+        if (config.image != null) {
+            new ImagePublisher(this).run(config.image, revision)
         }
     }
 }

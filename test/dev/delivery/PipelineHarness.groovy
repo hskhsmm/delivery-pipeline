@@ -1,5 +1,6 @@
 package dev.delivery
 
+import groovy.json.JsonSlurperClassic
 import org.yaml.snakeyaml.LoaderOptions
 import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.SafeConstructor
@@ -12,6 +13,9 @@ class PipelineHarness {
     final Map<String, String> workspace = [:]
     boolean failCheckout = false
     boolean failBuild = false
+    boolean failPublish = false
+    String revision = 'a' * 40
+    String publishMetadata = '{"containerimage.digest":"sha256:' + ('b' * 64) + '"}'
 
     PipelineHarness(Map<String, String> files = ['jenkins.yml': new File('test/fixtures/jenkins.yml').text]) {
         sourceFiles = new LinkedHashMap<String, String>(files)
@@ -40,6 +44,7 @@ class PipelineHarness {
                 events << [type: 'checkout', scm: scm]
                 if (failCheckout) throw new IllegalStateException('checkout failed')
                 workspace.putAll(sourceFiles)
+                [GIT_COMMIT: revision]
             },
             fileExists: { String path ->
                 events << [type: 'fileExists', path: path]
@@ -71,8 +76,21 @@ class PipelineHarness {
             echo: { String message -> events << [type: 'echo', message: message] },
             sh: { Map options ->
                 events << [type: 'sh', options: options, environment: new LinkedHashMap(environment)]
+                if (options.returnStdout) {
+                    if (failPublish) throw new IllegalStateException('publish failed')
+                    return publishMetadata
+                }
                 if (failBuild) throw new IllegalStateException('build failed')
             },
+            libraryResource: { String path -> new File("resources/${path}").text },
+            usernamePassword: { Map options -> options },
+            withCredentials: { List bindings, Closure body ->
+                events << [type: 'withCredentials', bindings: bindings]
+                body.call()
+            },
+            readJSON: { Map options -> new JsonSlurperClassic().parseText(options.text) },
+            writeJSON: { Map options -> events << [type: 'writeJSON', options: options] },
+            archiveArtifacts: { Map options -> events << [type: 'archive', options: options] },
             error: { String message -> throw new IllegalStateException(message) }
         ])
         return new GroovyShell(getClass().classLoader, binding).parse(new File("vars/${entrypoint}.groovy"))
