@@ -33,10 +33,10 @@ image:
 ```sh
 image_ref=$(jq -er .image published-image.json)
 docker pull "$image_ref"
-docker run --rm -p 127.0.0.1:8080:8080 "$image_ref"
+docker run --rm -p 127.0.0.1:18080:8080 "$image_ref"
 ```
 
-다른 터미널에서 `curl -fsS http://127.0.0.1:8080/health`가 `ok`를 반환하면 검증이 끝납니다.
+다른 터미널에서 `curl -fsS http://127.0.0.1:18080/health`가 `ok`를 반환하면 검증이 끝납니다.
 다음 GitOps 단계에서도 이 아티팩트의 `image` 값을 배포 설정에 사용합니다.
 
 샘플의 JAR만 확인하려면 라이브러리 저장소 루트에서 `./gradlew -p examples/gradle --no-daemon build`를 실행합니다.

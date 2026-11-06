@@ -10,7 +10,7 @@
 ## 구현 언어
 
 Jenkins 파이프라인 실행부는 Groovy Shared Library로 작성합니다.
-Java에서 익숙한 클래스, enum, 정적 타입 검사와 JUnit을 활용합니다.
+설정과 실행 책임을 클래스로 나누고 JUnit으로 동작을 검증합니다.
 Kubernetes를 사용한다는 이유로 Go를 추가하거나 CLI를 위해 TypeScript를 도입하지 않습니다.
 별도 CLI는 서비스 등록 과정에서 반복 작업이 확인될 때 검토합니다.
 
@@ -35,25 +35,25 @@ YAML에 뒤늦게 지정한 라벨을 무시하거나 다른 노드를 중첩 �
 
 서비스와 라이브러리 개발 환경 모두 `./gradlew --no-daemon build`를 사용합니다.
 단위 테스트의 SnakeYAML은 test 의존성이고 실제 Jenkins에서는 Pipeline Utility Steps의 `readYaml`을 사용합니다.
-실제 플러그인과 에이전트에서의 통합 검증은 별도로 진행해야 합니다.
+로컬 Jenkins에서 실제 플러그인과 에이전트를 사용해 Java 샘플 빌드와 Docker Hub 발행을 검증했습니다. 결과는 [README](../README.md)에 정리했습니다.
 
 ## GitOps 연결 계획
 
 ```text
 서비스 코드 변경
   → Jenkins Shared Library
-      Checkout → Verify → Publish Image → Open GitOps PR
-  → 배포 설정 저장소에 이미지 digest 반영
-  → PR merge 또는 환경별 승인
+      Checkout → Configure → Verify → Publish Image
+  → published-image.json의 digest를 배포 설정 저장소에 커밋
+      첫 검증은 수동, 이후 Jenkins가 PR 생성
   → Argo CD가 Git의 상태를 Kubernetes에 동기화
 ```
 
-Jenkins는 테스트와 이미지 빌드·발행, 배포 설정 변경을 맡습니다.
+Jenkins는 테스트와 이미지 빌드·발행을 맡고, 이후 배포 설정 변경 PR 생성까지 연결할 계획입니다.
 Argo CD는 배포 설정을 읽고 Kubernetes에 동기화합니다.
 레지스트리에 이미지가 올라갔다는 사실만으로 기본 Argo CD가 새 버전을 배포하지는 않습니다.
 이 경계는 [Argo CD 공식 CI 연동 흐름](https://argo-cd.readthedocs.io/en/stable/user-guide/ci_automation/)을 따릅니다.
 
-애플리케이션 소스와 GitOps 설정 저장소를 분리하고, Helm values에 환경별 이미지 digest를 기록할 계획입니다.
+애플리케이션 소스와 GitOps 설정 저장소를 분리합니다. 첫 배포에서는 일반 YAML의 `Deployment`에 이미지 digest를 기록하고, 환경별 차이가 생기면 Kustomize를 검토합니다.
 검증된 같은 이미지를 sandbox → beta → production으로 승격하며 환경마다 재빌드하지 않습니다.
 첫 연동은 한 서비스와 sandbox에 한정해 실제 동작부터 확인합니다.
 

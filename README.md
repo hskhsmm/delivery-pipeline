@@ -2,32 +2,59 @@
 
 [![CI](https://github.com/hskhsmm/delivery-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/hskhsmm/delivery-pipeline/actions/workflows/ci.yml)
 
-앞으로 만드는 Java 서비스에 재사용할 **Jenkins Shared Library**입니다.
-서비스는 작은 `Jenkinsfile`과 `jenkins.yml`을 제공하고, 공통 라이브러리가 설정 검증과 Gradle 빌드를 실행합니다.
-`image`를 설정하면 Docker Hub에 이미지를 발행하고 digest를 기록합니다. GitOps 연결은 다음 단계입니다.
+**Gradle 서비스가 설정 파일 하나로 공통 Jenkins 빌드와 Docker Hub 이미지 발행을 재사용하는 Shared Library입니다.**
 
-## 현재 구현
+서비스마다 Jenkinsfile에 빌드 명령, 환경변수 처리, 레지스트리 인증을 반복해서 작성하면 같은 정책을 바꿀 때 여러 저장소를 고쳐야 합니다. 이 프로젝트는 공통 절차를 Groovy 라이브러리에 두고, 서비스는 짧은 `Jenkinsfile`과 `jenkins.yml`로 필요한 값만 전달하도록 구성했습니다. 발행이 성공하면 소스 커밋과 정확한 이미지 참조를 한 파일에 남겨 다음 배포 단계에 전달합니다.
 
-```text
-deploy() 호출 옵션 검증 → 에이전트 할당 → Checkout → Configure → Verify → Publish Image(선택)
+## 현재 어디까지 되었나요?
+
+**실제 Jenkins에서 Java 샘플을 빌드해 Docker Hub에 발행하고, 발행된 이미지를 다시 받아 `/health` 응답까지 확인했습니다.** 검증된 이미지는 `linux/arm64`이며 Kubernetes·Argo CD 배포와 Kotlin 서비스 재사용 검증은 예정되어 있습니다.
+
+| 확인한 범위 | 검증 방법과 결과 |
+| --- | --- |
+| 공유 라이브러리 | Gradle 빌드와 테스트 42개 통과. YAML 검증, 단계 순서, 실패 시 발행 중단, 임시 인증 파일 정리 확인. [GitHub Actions](https://github.com/hskhsmm/delivery-pipeline/actions/runs/42138736968) |
+| 실제 Jenkins | 로컬 Jenkins에서 샌드박스를 켠 상태로 `Checkout → Configure → Verify → Publish Image` 실행. 발행 잡 #6 성공 및 `published-image.json` 보관. |
+| 원격 이미지 | Jenkins가 기록한 digest로 Docker Hub 로그인 없이 pull. 내려받은 컨테이너를 실행해 `/health`에서 `200 OK`와 `ok` 확인. [Docker Hub 이미지 저장소](https://hub.docker.com/repository/docker/smini/delivery-pipeline-demo) |
+
+### 발행된 데모 실행
+
+이미지 태그 대신 **digest**로 실행하면 Jenkins에서 확인한 것과 같은 이미지를 받을 수 있습니다. 아래 이미지는 ARM64 환경에서 검증했습니다.
+
+```sh
+docker run --rm -p 127.0.0.1:18080:8080 \
+  docker.io/smini/delivery-pipeline-demo@sha256:adf7d03d27803856ec4bb49ac268c1e11bcf3cf89b6950e0019d61467e68fd8d
 ```
 
-- 서비스 저장소의 `jenkins.yml` 읽기와 필수값·타입·알 수 없는 옵션 검증
-- `buildEnv`를 Verify 범위에만 적용하고 Gradle Wrapper로 빌드·테스트
-- 체크아웃·설정 읽기와 Gradle 빌드의 timeout 분리 및 실패 전파
-- 기존 `servicePipeline(...)`과 YAML 진입점이 동일한 Verify 구현 재사용
-- Docker Hub 이미지 발행과 `published-image.json`에 이미지 digest·소스 커밋 보관
-- Groovy 컴파일, 실제 YAML 파싱을 포함한 단위 테스트, GitHub Actions CI
+다른 터미널에서 `curl -i http://127.0.0.1:18080/health`를 실행하면 `200 OK`와 `ok`가 표시됩니다. 공개 이미지는 로컬 발행 검증용 경량 Dockerfile로 만들었으며, 이 저장소의 기본 예제는 [별도의 Dockerfile](examples/gradle/Dockerfile)을 제공합니다.
 
-`deploy()`의 현재 범위는 빌드 검증과 선택적 이미지 발행입니다.
-[로드맵](docs/roadmap.md)에 실제 Jenkins 발행 검증과 GitOps 배포 계획을 정리했습니다.
+## 어떻게 설계했나요?
 
-## 사용 예시
+```text
+서비스 저장소 ── Jenkinsfile + jenkins.yml
+    ↓
+deploy() ── Checkout → Configure → Verify → Publish Image (선택)
+    ↓
+Docker Hub 이미지 + published-image.json (이미지 digest와 소스 커밋)
+```
 
-Jenkins에 `delivery-pipeline` 라이브러리를 등록하고 **Pipeline Utility Steps** 플러그인을 준비합니다.
-서비스 저장소 루트에 다음 두 파일을 둡니다.
+| 설계 결정 | 코드에서 적용한 방식 |
+| --- | --- |
+| 서비스 설정과 공통 정책 분리 | [deploy()](vars/deploy.groovy)가 에이전트를 할당한 뒤 한 번만 체크아웃합니다. 같은 작업 공간에서 [YAML 설정](src/dev/delivery/ServiceConfig.groovy)을 읽고 필수값, 타입, 지원하지 않는 키를 검사합니다. |
+| 실패 지점과 실행 범위 명확화 | 체크아웃·설정 읽기와 빌드에 각각 제한 시간을 둡니다. [Gradle Verify](src/dev/delivery/GradleBuild.groovy)는 `buildEnv`를 빌드 명령에만 적용합니다. Verify에서 실패하면 발행 단계에 진입하지 않습니다. |
+| 자격 증명 사용 범위 제한 | [이미지 발행 단계](src/dev/delivery/ImagePublisher.groovy)가 Jenkins 자격 증명을 발행 셸에만 연결합니다. [발행 스크립트](resources/dev/delivery/publish-image.sh)는 빌드 컨텍스트 밖에 임시 Docker 설정을 만들고 종료 시 삭제합니다. |
+| 소스와 배포할 이미지 연결 | 소스 커밋 SHA를 이미지 태그에 넣고, Buildx가 반환한 digest를 검증한 뒤 `published-image.json`에 이미지 참조와 소스 커밋을 기록합니다. |
 
-`Jenkinsfile`:
+처음에는 설정 검증과 단계 순서를 테스트 하네스로 확인했습니다. 실제 Jenkins로 옮기자 설정 객체 생성에서 Groovy CPS 실행 방식과 샌드박스의 제약이 드러났습니다. 검증을 팩터리 메서드로 옮기고 생성자에는 필드 대입만 남겼으며, 직접 생성하던 컬렉션을 Groovy 리터럴로 바꿔 샌드박스 승인 추가 없이 실행했습니다. [CPS 수정](https://github.com/hskhsmm/delivery-pipeline/commit/a7f9d3f) · [샌드박스 수정](https://github.com/hskhsmm/delivery-pipeline/commit/05e6d08) · [Jenkins CPS 레퍼런스](https://www.jenkins.io/doc/book/pipeline/cps-method-mismatches/)
+
+실제 발행에서는 인증 후 레이어 업로드 중 연결이 끊겼습니다. 로컬 샘플에서 `jlink`로 필요한 Java 모듈만 포함하고 런타임을 여러 레이어로 나눈 뒤, 같은 라이브러리로 발행과 pull을 완료했습니다. 이 검증에서 공용 라이브러리의 발행 로직은 그대로 사용했습니다.
+
+## 내 서비스에서 사용하기
+
+1. Jenkins에 이 저장소를 `delivery-pipeline`이라는 Shared Library로 등록합니다. Jenkins에는 **Pipeline Utility Steps**가, 에이전트에는 서비스에 맞는 JDK와 POSIX 셸이 필요합니다. [Jenkins 등록 가이드](docs/getting-started.md)
+2. 서비스 저장소 루트에 실행 가능한 Gradle Wrapper와 아래 두 파일을 둡니다. Jenkins 잡은 **Pipeline from SCM** 또는 **Multibranch Pipeline**으로 서비스 저장소를 연결합니다.
+3. Docker Hub 발행도 하려면 에이전트에 Docker Engine·CLI·Buildx를 준비하고, Jenkins Credentials에 Docker Hub 사용자명과 쓰기 권한 토큰을 **Username with password**로 등록합니다. **Credentials Binding** 플러그인이 이 자격 증명을 발행 단계에 연결합니다. 서비스의 루트 `Dockerfile`과 아래 `image` 설정을 사용합니다. [이미지 발행 가이드](docs/image-publishing.md)
+
+**Jenkinsfile**
 
 ```groovy
 @Library('delivery-pipeline@main') _
@@ -35,68 +62,40 @@ Jenkins에 `delivery-pipeline` 라이브러리를 등록하고 **Pipeline Utilit
 deploy()
 ```
 
-`jenkins.yml`:
+**jenkins.yml**
 
 ```yaml
 serviceName: orders-api
 timeoutMinutes: 30
-buildEnv:
-  JAVA_TOOL_OPTIONS: '-Xmx1g'
-  CI: 'true'
+image:
+  repository: your-namespace/orders-api
+  credentialsId: dockerhub-publisher
 ```
 
-YAML을 읽으려면 에이전트와 체크아웃이 먼저 필요합니다. 기본 라벨은 `java`이며,
-다른 에이전트가 필요하면 `deploy(agentLabel: 'java21')`처럼 Jenkinsfile에서 지정합니다.
-YAML 안의 `agentLabel`은 적용 시점이 늦기 때문에 거부합니다.
+`image` 블록을 생략하면 Gradle 검증까지만 실행합니다. 에이전트 기본 라벨은 `java`이며 필요하면 Jenkinsfile에서 `deploy(agentLabel: 'java21-docker')`로 지정합니다. 팀에서 계속 사용할 때는 `@main` 대신 검증한 커밋 SHA나 릴리스 태그를 고정할 수 있습니다. [설정과 API 레퍼런스](docs/reference.md)
 
-처음 연결할 때는 `@main`을 사용할 수 있습니다. 계속 사용할 서비스에는 검증한 커밋 SHA 또는
-릴리스 태그를 고정하세요. 아직 릴리스 태그는 없습니다.
-서비스에는 실행 가능한 `gradlew`와 Wrapper 설정이, 에이전트에는 해당 서비스의 JDK가 필요합니다.
-Docker Hub 설정과 digest로 다시 pull하는 방법은 [이미지 발행 가이드](docs/image-publishing.md)에 있습니다.
+## 로컬 개발과 코드 구조
 
-## 개발과 검증
-
-라이브러리 개발 환경은 JDK 21과 Gradle Wrapper 9.8.2입니다.
-Jenkins DSL과의 호환성을 고려해 Groovy 2.4.21로 컴파일합니다.
+JDK 21과 저장소에 포함된 Gradle Wrapper를 사용합니다. 아래 명령은 라이브러리의 Groovy 컴파일과 테스트를 실행하며, GitHub Actions도 같은 명령을 실행합니다.
 
 ```sh
 ./gradlew --no-daemon build
 ```
 
-첫 실행에는 Gradle과 의존성을 내려받습니다. 배포본 SHA-256과 `gradle.lockfile`로 버전을 고정합니다.
-테스트 하네스는 Jenkins 스텝을 대체하고 YAML은 SnakeYAML로 실제 파싱합니다.
-테스트는 발행 셸도 Docker 대역으로 실행해 임시 인증 파일 정리를 확인합니다.
-실제 Jenkins에서 Docker Hub 발행과 digest pull을 검증하는 작업은 남아 있습니다.
+| 위치 | 역할 |
+| --- | --- |
+| [`vars/`](vars/) | Jenkins 공개 진입점 `deploy()`, `servicePipeline(...)` |
+| [`src/dev/delivery/`](src/dev/delivery/) | 설정 검증, Gradle 빌드, 이미지 발행 |
+| [`resources/dev/delivery/`](resources/dev/delivery/) | Docker Buildx 발행 스크립트 |
+| [`test/`](test/) | Jenkins 스텝 하네스, 실제 YAML 파싱, 발행 실패 및 인증 파일 정리 테스트 |
+| [`examples/gradle/`](examples/gradle/) | Java 샘플, Jenkinsfile, 서비스 YAML, Dockerfile |
 
-## 디렉토리
+[아키텍처와 설계 결정](docs/architecture.md) · [기여와 커밋 규칙](CONTRIBUTING.md)
 
-```text
-vars/                         deploy, servicePipeline 공개 진입점과 도움말
-src/dev/delivery/             설정 검증, Gradle Verify, 이미지 발행
-resources/dev/delivery/       Docker Buildx 발행 스크립트
-test/dev/delivery/            설정·진입점·실패 처리 테스트와 스텝 하네스
-test/fixtures/                실제 파싱하는 YAML 테스트 입력
-examples/gradle/              서비스 설정, Dockerfile, 검증용 Java 샘플
-build.gradle                 라이브러리 컴파일과 테스트 설정
-gradle/wrapper/               고정된 Gradle 실행 환경
-docs/                        시작 가이드, API, 설계와 로드맵
-.github/workflows/ci.yml      라이브러리 자체 검증
-```
+## 다음 단계
 
-라이브러리는 Jenkins가 Git 소스를 읽는 방식으로 사용합니다.
-이 레포의 GitHub Actions는 라이브러리를 검증하고, 서비스의 Jenkins 잡은 실제 Gradle 빌드를 실행합니다.
+1. **로컬 Kubernetes에서 첫 GitOps 배포.** 로컬 클러스터를 확인하고 Argo CD를 설치합니다. 별도 GitOps 저장소에 일반 YAML로 `Deployment`와 `Service`를 작성하고, `published-image.json`의 `image` 값을 `Deployment`에 직접 커밋합니다. 완료 기준은 Argo CD의 `Synced`·`Healthy` 상태와 클러스터에서 실행한 `/health`의 `200 OK`입니다.
+2. **수동으로 확인한 연결을 자동화.** Jenkins가 발행에 성공하면 GitOps 저장소의 이미지 digest를 바꾸는 PR을 열고, PR이 병합되면 Argo CD가 Git의 상태를 클러스터에 반영하도록 연결합니다.
+3. **재사용 범위 검증.** 별도 Kotlin Gradle 서비스에서도 같은 진입점으로 발행하고, `amd64` 환경이 필요해지면 해당 플랫폼용 이미지 빌드와 실행을 검증합니다. 환경별 차이가 생기면 Kustomize로 공통 YAML과 환경별 설정을 분리하는 방식을 검토합니다.
 
-## 문서
-
-- [Jenkins에 연결하기](docs/getting-started.md)
-- [Docker Hub 이미지 발행하기](docs/image-publishing.md)
-- [deploy와 servicePipeline 레퍼런스](docs/reference.md)
-- [아키텍처와 설계 결정](docs/architecture.md)
-- [로드맵](docs/roadmap.md)
-- [기여와 커밋 규칙](CONTRIBUTING.md)
-
-## 참고
-
-- [Jenkins Shared Libraries](https://www.jenkins.io/doc/book/pipeline/shared-libraries/)
-- [Pipeline Utility Steps: readYaml](https://www.jenkins.io/doc/pipeline/steps/pipeline-utility-steps/#readyaml-read-yaml-from-a-file-in-the-workspace-or-text)
-- [Argo CD의 CI 연동](https://argo-cd.readthedocs.io/en/stable/user-guide/ci_automation/)
+[상세 로드맵](docs/roadmap.md) · [Argo CD의 CI 연동 방식](https://argo-cd.readthedocs.io/en/stable/user-guide/ci_automation/)
