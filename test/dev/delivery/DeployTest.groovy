@@ -99,9 +99,10 @@ class DeployTest {
     @Test
     void successiveInvocationsDoNotRetainPreviousYamlEnvironment() {
         PipelineHarness harness = new PipelineHarness()
-        harness.load('deploy').call()
+        Script pipeline = harness.load('deploy')
+        pipeline.call()
         harness.sourceFiles['jenkins.yml'] = 'serviceName: other-api'
-        harness.load('deploy').call()
+        pipeline.call()
         List builds = harness.events.findAll { it.type == 'sh' }
         assertEquals(2, builds.size())
         assertFalse(builds[1].environment.containsKey('JAVA_TOOL_OPTIONS'))

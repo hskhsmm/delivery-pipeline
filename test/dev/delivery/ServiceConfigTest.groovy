@@ -4,9 +4,11 @@ import org.junit.Test
 import static org.junit.Assert.*
 
 class ServiceConfigTest {
+    private final Script pipeline = new PipelineHarness().load('deploy')
+
     @Test
     void appliesDefaults() {
-        ServiceConfig config = ServiceConfig.fromOptions([serviceName: 'orders-api'])
+        Map config = pipeline.serviceConfig([serviceName: 'orders-api'])
         assertEquals('orders-api', config.serviceName)
         assertEquals('java', config.agentLabel)
         assertEquals(30, config.timeoutMinutes)
@@ -14,7 +16,7 @@ class ServiceConfigTest {
 
     @Test
     void acceptsExplicitAgentSettings() {
-        ServiceConfig config = ServiceConfig.fromOptions([
+        Map config = pipeline.serviceConfig([
             serviceName: 'payments-api',
             agentLabel: 'java21 && linux', timeoutMinutes: 60
         ])
@@ -45,8 +47,8 @@ class ServiceConfigTest {
 
     @Test
     void acceptsTimeoutBoundaryValues() {
-        assertEquals(1, ServiceConfig.fromOptions([serviceName: 'api', timeoutMinutes: 1L]).timeoutMinutes)
-        assertEquals(120, ServiceConfig.fromOptions([serviceName: 'api', timeoutMinutes: 120]).timeoutMinutes)
+        assertEquals(1, pipeline.serviceConfig([serviceName: 'api', timeoutMinutes: 1L]).timeoutMinutes)
+        assertEquals(120, pipeline.serviceConfig([serviceName: 'api', timeoutMinutes: 120]).timeoutMinutes)
     }
 
     @Test
@@ -57,12 +59,12 @@ class ServiceConfigTest {
 
     @Test
     void configurationSurvivesSerializationForPipelineState() {
-        ServiceConfig original = ServiceConfig.fromOptions([
+        Map original = pipeline.serviceConfig([
             serviceName: 'api', agentLabel: 'java21', buildEnv: [JAVA_TOOL_OPTIONS: '-Xmx1g']
         ])
         ByteArrayOutputStream bytes = new ByteArrayOutputStream()
         new ObjectOutputStream(bytes).withCloseable { it.writeObject(original) }
-        ServiceConfig restored = (ServiceConfig) new ObjectInputStream(
+        Map restored = (Map) new ObjectInputStream(
             new ByteArrayInputStream(bytes.toByteArray())
         ).readObject()
         assertEquals(original.serviceName, restored.serviceName)
@@ -73,9 +75,9 @@ class ServiceConfigTest {
     @Test
     void createsServiceConfigurationFromYamlWithoutMutatingInput() {
         Map document = [serviceName: 'api', buildEnv: [CI: 'true']]
-        ServiceConfig config = ServiceConfig.fromYaml(document, 'java21')
+        Map config = pipeline.serviceConfigFromYaml(document, 'java21')
         assertEquals('java21', config.agentLabel)
-        assertEquals(['CI=true'], config.environmentOverrides())
+        assertEquals(['CI=true'], pipeline.environmentOverrides(config.buildEnv))
         assertFalse(document.containsKey('agentLabel'))
         document.buildEnv.CI = 'changed'
         assertEquals('true', config.buildEnv.CI)
@@ -85,14 +87,14 @@ class ServiceConfigTest {
     void rejectsNonMappingYamlAndAgentSelectionInsideYaml() {
         [null, [], 'api', 123, [[serviceName: 'api'], [serviceName: 'other']]].each { document ->
             try {
-                ServiceConfig.fromYaml(document, 'java')
+                pipeline.serviceConfigFromYaml(document, 'java')
                 fail('Expected YAML root validation to fail')
             } catch (IllegalArgumentException expected) {
                 assertTrue(expected.message.contains('mapping'))
             }
         }
         try {
-            ServiceConfig.fromYaml([serviceName: 'api', agentLabel: 'another-agent'], 'java')
+            pipeline.serviceConfigFromYaml([serviceName: 'api', agentLabel: 'another-agent'], 'java')
             fail('Expected late agent selection to fail')
         } catch (IllegalArgumentException expected) {
             assertTrue(expected.message.contains('deploy('))
@@ -105,7 +107,7 @@ class ServiceConfigTest {
             rejects([serviceName: 'api', buildEnv: it])
         }
         try {
-            ServiceConfig.fromOptions([serviceName: 'api', buildEnv: [TOKEN: ['private-value']]])
+            pipeline.serviceConfig([serviceName: 'api', buildEnv: [TOKEN: ['private-value']]])
             fail('Expected invalid environment value to fail')
         } catch (IllegalArgumentException expected) {
             assertFalse(expected.message.contains('private-value'))
@@ -114,10 +116,10 @@ class ServiceConfigTest {
 
     @Test
     void environmentSnapshotIsImmutableAndPreservesStringValues() {
-        ServiceConfig config = ServiceConfig.fromOptions([
+        Map config = pipeline.serviceConfig([
             serviceName: 'api', buildEnv: [EMPTY: '', OPTIONS: '-Dname=api $(echo literal)']
         ])
-        assertEquals(['EMPTY=', 'OPTIONS=-Dname=api $(echo literal)'], config.environmentOverrides())
+        assertEquals(['EMPTY=', 'OPTIONS=-Dname=api $(echo literal)'], pipeline.environmentOverrides(config.buildEnv))
         try {
             config.buildEnv.put('OTHER', 'value')
             fail('Expected immutable environment settings')
@@ -131,9 +133,9 @@ class ServiceConfigTest {
         rejects([(1): 'value', serviceName: 'api'])
     }
 
-    private static void rejects(Map options) {
+    private void rejects(Map options) {
         try {
-            ServiceConfig.fromOptions(options)
+            pipeline.serviceConfig(options)
             fail('Expected invalid configuration to fail')
         } catch (IllegalArgumentException expected) {
             assertFalse(expected.message.isEmpty())

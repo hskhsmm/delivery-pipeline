@@ -4,9 +4,11 @@ import org.junit.Test
 import static org.junit.Assert.*
 
 class DeployOptionsTest {
+    private final Script pipeline = new PipelineHarness().load('deploy')
+
     @Test
     void providesBootstrapDefaults() {
-        DeployOptions options = DeployOptions.fromOptions([:])
+        Map options = pipeline.deployOptions([:])
         assertEquals('java', options.agentLabel)
         assertEquals('jenkins.yml', options.configFile)
         assertEquals(10, options.checkoutTimeoutMinutes)
@@ -14,7 +16,7 @@ class DeployOptionsTest {
 
     @Test
     void acceptsRepositoryRelativeConfigAndAgentLabelExpression() {
-        DeployOptions options = DeployOptions.fromOptions([
+        Map options = pipeline.deployOptions([
             configFile: '.ci/jenkins.yaml', agentLabel: 'java21 && linux', checkoutTimeoutMinutes: 15
         ])
         assertEquals('.ci/jenkins.yaml', options.configFile)
@@ -44,9 +46,9 @@ class DeployOptionsTest {
         }
     }
 
-    private static void rejects(Map options) {
+    private void rejects(Map options) {
         try {
-            DeployOptions.fromOptions(options)
+            pipeline.deployOptions(options)
             fail('Expected invalid deploy options to fail')
         } catch (IllegalArgumentException expected) {
             assertFalse(expected.message.isEmpty())

@@ -28,7 +28,7 @@ java {
 sourceSets {
     // Jenkins Shared Library 표준 경로를 유지하면서 Gradle의 소스 경로만 맞춘다.
     main {
-        groovy.srcDirs = ['src', 'vars']
+        groovy.srcDirs = ['vars']
         java.srcDirs = []
     }
     test {

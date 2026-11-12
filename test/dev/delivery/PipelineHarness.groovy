@@ -93,6 +93,10 @@ class PipelineHarness {
             archiveArtifacts: { Map options -> events << [type: 'archive', options: options] },
             error: { String message -> throw new IllegalStateException(message) }
         ])
-        return new GroovyShell(getClass().classLoader, binding).parse(new File("vars/${entrypoint}.groovy"))
+        GroovyShell shell = new GroovyShell(getClass().classLoader, binding)
+        if (entrypoint == 'servicePipeline') {
+            binding.setVariable('deploy', shell.parse(new File('vars/deploy.groovy')))
+        }
+        return shell.parse(new File("vars/${entrypoint}.groovy"))
     }
 }

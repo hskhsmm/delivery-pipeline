@@ -4,15 +4,17 @@ import org.junit.Test
 import static org.junit.Assert.*
 
 class ImageConfigTest {
+    private final Script pipeline = new PipelineHarness().load('deploy')
+
     @Test
     void yamlEnablesPublishingOnlyWhenImageIsConfigured() {
-        assertNull(ServiceConfig.fromYaml([serviceName: 'api'], 'java').image)
-        ImageConfig image = ServiceConfig.fromYaml([
+        assertNull(pipeline.serviceConfigFromYaml([serviceName: 'api'], 'java').image)
+        Map image = pipeline.serviceConfigFromYaml([
             serviceName: 'api', image: [repository: 'team/my-api', credentialsId: 'hub']
         ], 'java').image
         assertEquals('docker.io/team/my-api', image.repository)
         assertEquals('hub', image.credentialsId)
-        assertEquals(image.repository, ImageConfig.fromOptions([
+        assertEquals(image.repository, pipeline.imageConfig([
             repository: image.repository, credentialsId: 'hub'
         ]).repository)
     }
@@ -28,7 +30,7 @@ class ImageConfigTest {
             [repository: 'Team/api', credentialsId: 'hub']
         ].each { value ->
             try {
-                ServiceConfig.fromYaml([serviceName: 'api', image: value], 'java')
+                pipeline.serviceConfigFromYaml([serviceName: 'api', image: value], 'java')
                 fail('Expected invalid image configuration')
             } catch (IllegalArgumentException expected) {
                 assertFalse(expected.message.contains('placeholder'))
