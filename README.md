@@ -17,6 +17,10 @@
 | 원격 이미지 | Jenkins가 서비스 커밋 SHA로 태그를 만들고, 발행한 이미지의 digest와 `sourceRevision`을 아티팩트에 기록. 공개 이미지 저장소에서 digest로 내려받을 수 있습니다. [Docker Hub 이미지 저장소](https://hub.docker.com/repository/docker/smini/delivery-pipeline-demo) |
 | 로컬 GitOps 재배포 | 전용 kind 클러스터 `delivery-sandbox`에서 Argo CD가 새 digest를 담은 로컬 GitOps 커밋 `c03c382`로 동기화. `Synced`·`Healthy`, 새 Pod의 이미지 pull 이벤트, Service의 `/health` 응답 `200 OK` 확인. |
 
+![Argo CD에서 delivery-demo가 Healthy이고 GitOps 커밋 c03c382에 동기화된 화면](docs/images/argocd-delivery-demo.jpg)
+
+*Argo CD에서 GitOps 커밋 `c03c382`의 동기화 성공과 새 Pod의 실행 상태를 확인했습니다. 커밋 작성자 정보는 가렸습니다.*
+
 ### 발행된 데모 실행
 
 이미지 태그 대신 **digest**로 실행하면 Jenkins에서 확인한 것과 같은 이미지를 받을 수 있습니다. 아래 이미지는 ARM64 환경에서 검증했습니다.
