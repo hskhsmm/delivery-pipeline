@@ -8,14 +8,14 @@
 
 ## 현재 어디까지 되었나요?
 
-**Jenkins에서 발행한 Java 이미지를 로컬 Kubernetes에 Argo CD로 배포해 `/health` 응답까지 확인했습니다.** Jenkins가 남긴 `published-image.json`의 이미지 digest를 로컬 GitOps 저장소에 직접 커밋했고, Argo CD가 같은 커밋을 동기화했습니다. 검증 환경은 `linux/arm64`입니다.
+**GitHub의 Java 서비스 커밋을 Jenkins가 직접 받아 Docker Hub에 발행하고, Argo CD가 새 이미지로 로컬 Kubernetes의 배포를 갱신하는 것까지 검증했습니다.** Jenkins가 남긴 `published-image.json`의 이미지 digest를 로컬 GitOps 저장소에 직접 커밋했습니다. 검증 환경은 `linux/arm64`입니다.
 
 | 확인한 범위 | 검증 방법과 결과 |
 | --- | --- |
-| 공유 라이브러리 | Gradle 빌드와 테스트 42개 통과. YAML 검증, 단계 순서, 실패 시 발행 중단, 임시 인증 파일 정리 확인. [GitHub Actions](https://github.com/hskhsmm/delivery-pipeline/actions/runs/42138736968) |
-| 실제 Jenkins | 로컬 Jenkins에서 샌드박스를 켠 상태로 `Checkout → Configure → Verify → Publish Image` 실행. 발행 잡 #6 성공 및 `published-image.json` 보관. |
-| 원격 이미지 | Jenkins가 기록한 digest로 Docker Hub 로그인 없이 pull. 내려받은 컨테이너를 실행해 `/health`에서 `200 OK`와 `ok` 확인. [Docker Hub 이미지 저장소](https://hub.docker.com/repository/docker/smini/delivery-pipeline-demo) |
-| 로컬 GitOps 배포 | 전용 kind 클러스터 `delivery-sandbox`에서 Argo CD가 로컬 GitOps 커밋 `d346655`의 `Deployment`와 `Service`를 반영. `Synced`·`Healthy`, Docker Hub에서 같은 digest를 받은 Kubernetes 이벤트, Service의 `/health` 응답 `200 OK` 확인. |
+| 공유 라이브러리 | Gradle 빌드와 테스트 42개 통과. YAML 검증, 단계 순서, 실패 시 발행 중단, 임시 인증 파일 정리 확인. [GitHub Actions](https://github.com/hskhsmm/delivery-pipeline/actions/runs/43142730524) |
+| 실제 Jenkins | 비공개 Java 서비스 커밋 `01c4f84`과 공개 공유 라이브러리 커밋 `6a3367c`를 GitHub에서 직접 체크아웃. `Checkout → Configure → Verify → Publish Image` 성공 및 `published-image.json` 보관. |
+| 원격 이미지 | Jenkins가 서비스 커밋 SHA로 태그를 만들고, 발행한 이미지의 digest와 `sourceRevision`을 아티팩트에 기록. 공개 이미지 저장소에서 digest로 내려받을 수 있습니다. [Docker Hub 이미지 저장소](https://hub.docker.com/repository/docker/smini/delivery-pipeline-demo) |
+| 로컬 GitOps 재배포 | 전용 kind 클러스터 `delivery-sandbox`에서 Argo CD가 새 digest를 담은 로컬 GitOps 커밋 `c03c382`로 동기화. `Synced`·`Healthy`, 새 Pod의 이미지 pull 이벤트, Service의 `/health` 응답 `200 OK` 확인. |
 
 ### 발행된 데모 실행
 
@@ -23,7 +23,7 @@
 
 ```sh
 docker run --rm -p 127.0.0.1:18080:8080 \
-  docker.io/smini/delivery-pipeline-demo@sha256:adf7d03d27803856ec4bb49ac268c1e11bcf3cf89b6950e0019d61467e68fd8d
+  docker.io/smini/delivery-pipeline-demo@sha256:33eef84e8c41ac26054eee2dd22b9e80abc940ed5528ee73317b113903b90d5e
 ```
 
 다른 터미널에서 `curl -i http://127.0.0.1:18080/health`를 실행하면 `200 OK`와 `ok`가 표시됩니다. 공개 이미지는 로컬 발행 검증용 경량 Dockerfile로 만들었습니다. 같은 Dockerfile을 별도 Java 테스트 서비스 저장소에 담았고, 이 라이브러리 저장소의 [기본 예제](examples/gradle/Dockerfile)는 일반 JRE 이미지로 시작합니다.
@@ -97,8 +97,8 @@ JDK 21과 저장소에 포함된 Gradle Wrapper를 사용합니다. 아래 명�
 
 ## 다음 단계
 
-1. **GitHub의 Java 테스트 서비스 연결.** `Jenkinsfile`, `jenkins.yml`, Gradle Wrapper, 경량 Dockerfile을 갖춘 별도 서비스 저장소를 준비했습니다. 다음에는 Jenkins가 GitHub에서 서비스와 라이브러리를 각각 체크아웃해 새 커밋의 이미지와 `published-image.json`을 만드는지 확인합니다.
-2. **원격 GitOps 저장소로 연결 확장.** Argo CD의 소스를 원격 GitOps 저장소로 바꾸고, 새 digest를 직접 커밋해 새 버전이 클러스터에 반영되는지 확인합니다. 이후 Jenkins가 digest 변경 PR을 열도록 자동화합니다.
+1. **원격 GitOps 저장소 연결.** Argo CD의 소스를 원격 GitOps 저장소로 옮기고, 그 저장소의 변경이 클러스터에 반영되는지 확인합니다.
+2. **digest 변경 PR 자동화.** Jenkins가 발행에 성공하면 `published-image.json`의 digest로 배포 설정 변경 PR을 엽니다. PR이 병합되면 Argo CD가 추적하는 Git 브랜치의 변경을 반영합니다.
 3. **재사용 범위 검증.** 별도 Kotlin Gradle 서비스에서도 같은 진입점으로 발행하고, `amd64` 환경이 필요해지면 해당 플랫폼용 이미지 빌드와 실행을 검증합니다. 환경별 차이가 생기면 Kustomize로 공통 YAML과 환경별 설정을 분리하는 방식을 검토합니다.
 
 [상세 로드맵](docs/roadmap.md) · [Argo CD의 CI 연동 방식](https://argo-cd.readthedocs.io/en/stable/user-guide/ci_automation/)

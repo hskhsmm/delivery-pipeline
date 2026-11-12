@@ -51,7 +51,7 @@ Argo CD는 배포 설정을 읽고 Kubernetes에 동기화합니다.
 
 애플리케이션 소스와 GitOps 설정 저장소를 분리합니다. 첫 배포에서는 일반 YAML의 `Deployment`에 이미지 digest를 기록하고, 환경별 차이가 생기면 Kustomize를 검토합니다.
 검증된 같은 이미지를 sandbox → beta → production으로 승격하며 환경마다 재빌드하지 않습니다.
-첫 연동은 전용 로컬 kind 클러스터에서 검증했습니다. Argo CD는 클러스터 내부의 읽기 전용 Git 서비스에서 로컬 GitOps 커밋을 읽었고, Kubernetes는 커밋에 지정된 이미지를 Docker Hub에서 받아 실행했습니다. 다음 연동에서는 원격 GitOps 저장소에 새 digest를 커밋하는 흐름을 확인합니다.
+전용 로컬 kind 클러스터에서 첫 배포와 이미지 갱신을 검증했습니다. Jenkins가 GitHub에서 서비스와 라이브러리를 직접 받아 이미지를 발행한 뒤, 그 digest를 로컬 GitOps 저장소에 직접 커밋했습니다. Argo CD는 클러스터 내부의 읽기 전용 Git 서비스에서 커밋을 읽었고, Kubernetes는 지정된 이미지를 Docker Hub에서 받아 실행했습니다. 다음에는 Argo CD를 원격 GitOps 저장소에 연결합니다.
 
 기본 Deployment의 RollingUpdate로 시작합니다.
 카나리·분석 기반 승격이나 중단은 [Argo Rollouts](https://argoproj.github.io/argo-rollouts/)의 역할로 분리해 후속 검토합니다.
