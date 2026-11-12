@@ -16,9 +16,10 @@ Kubernetes를 사용한다는 이유로 Go를 추가하거나 CLI를 위해 Type
 
 ## 코드 경계
 
-- `vars/deploy.groovy`: Checkout → Configure → Verify → 선택적 Publish Image 흐름과 설정 검증을 포함합니다.
+- `vars/deploy.groovy`: Checkout → Configure → Verify → 선택적 Publish Image와 Open GitOps PR 흐름 및 설정 검증을 포함합니다.
 - `vars/servicePipeline.groovy`: 기존 Map 호출을 `deploy.groovy`에 위임합니다. 두 진입점이 같은 Verify 구현을 사용합니다.
 - `resources/dev/delivery/publish-image.sh`: Docker Buildx를 실행하고 발행 메타데이터를 반환합니다.
+- `resources/dev/delivery/gitops-pr.sh`: 배포 설정 저장소를 가져오고, 지정한 파일을 배포 브랜치에 커밋해 GitHub PR을 엽니다.
 - 테스트 하네스: Jenkins 스텝을 기록하고 YAML을 실제로 파싱해 순서와 실패 전파를 확인합니다.
 
 설정을 읽으려면 체크아웃할 에이전트가 먼저 필요합니다. 에이전트 라벨은 `deploy(...)`에서 지정하며,
@@ -33,25 +34,25 @@ YAML에 뒤늦게 지정한 라벨을 무시하거나 다른 노드를 중첩 �
 단위 테스트의 SnakeYAML은 test 의존성이고 실제 Jenkins에서는 Pipeline Utility Steps의 `readYaml`을 사용합니다.
 로컬 Jenkins에서 실제 플러그인과 에이전트를 사용해 Java 샘플 빌드와 Docker Hub 발행을 검증했습니다. 결과는 [README](../README.md)에 정리했습니다.
 
-## GitOps 연결 계획
+## GitOps 연결
 
 ```text
 서비스 코드 변경
   → Jenkins Shared Library
       Checkout → Configure → Verify → Publish Image
-  → published-image.json의 digest를 배포 설정 저장소에 커밋
-      첫 검증은 수동, 이후 Jenkins가 PR 생성
+  → 검증된 digest로 배포 설정 변경 PR 생성
+  → PR 리뷰 및 병합
   → Argo CD가 Git의 상태를 Kubernetes에 동기화
 ```
 
-Jenkins는 테스트와 이미지 빌드·발행을 맡고, 이후 배포 설정 변경 PR 생성까지 연결할 계획입니다.
+Jenkins는 테스트와 이미지 빌드·발행을 맡고, `gitOps`를 사용하는 `main` 빌드에서 배포 설정 변경 PR을 엽니다.
 Argo CD는 배포 설정을 읽고 Kubernetes에 동기화합니다.
 레지스트리에 이미지가 올라갔다는 사실만으로 기본 Argo CD가 새 버전을 배포하지는 않습니다.
 이 경계는 [Argo CD 공식 CI 연동 흐름](https://argo-cd.readthedocs.io/en/stable/user-guide/ci_automation/)을 따릅니다.
 
 애플리케이션 소스와 GitOps 설정 저장소를 분리합니다. 첫 배포에서는 일반 YAML의 `Deployment`에 이미지 digest를 기록하고, 환경별 차이가 생기면 Kustomize를 검토합니다.
 검증된 같은 이미지를 sandbox → beta → production으로 승격하며 환경마다 재빌드하지 않습니다.
-전용 로컬 kind 클러스터에서 첫 배포와 이미지 갱신을 검증했습니다. Jenkins가 GitHub에서 서비스와 라이브러리를 직접 받아 이미지를 발행한 뒤, 그 digest를 로컬 GitOps 저장소에 직접 커밋했습니다. Argo CD는 클러스터 내부의 읽기 전용 Git 서비스에서 커밋을 읽었고, Kubernetes는 지정된 이미지를 Docker Hub에서 받아 실행했습니다. 다음에는 Argo CD를 원격 GitOps 저장소에 연결합니다.
+전용 로컬 kind 클러스터에서 첫 배포와 이미지 갱신을 검증했습니다. Jenkins가 GitHub에서 서비스와 라이브러리를 직접 받아 발행한 이미지의 digest를 배포 설정 저장소에 직접 커밋했습니다. Argo CD는 먼저 로컬 Git 서비스에서, 이후 읽기 전용 SSH 키로 비공개 GitHub 저장소에서 설정을 읽어 동기화했습니다. Jenkins의 PR 자동 생성과 병합을 포함한 실행은 별도 검증 대상으로 남아 있습니다.
 
 기본 Deployment의 RollingUpdate로 시작합니다.
 카나리·분석 기반 승격이나 중단은 [Argo Rollouts](https://argoproj.github.io/argo-rollouts/)의 역할로 분리해 후속 검토합니다.

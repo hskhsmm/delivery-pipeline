@@ -33,9 +33,9 @@
 - [x] 로컬 GitOps 저장소에 한 서비스의 `Deployment`와 `Service`를 일반 YAML로 작성
 - [x] 발행된 digest를 Git에 직접 커밋하고 Argo CD의 `Synced`·`Healthy` 및 Service의 `/health` 확인
 - [x] GitHub에서 직접 체크아웃해 발행한 이미지로 샌드박스의 기존 배포 갱신 검증
-- [ ] Argo CD를 원격 GitOps 저장소에 연결하고 새 이미지 digest 반영 검증
-- [ ] Jenkins에서 sandbox 이미지 digest 변경 PR 생성
-- [ ] 동일 요청 재시도 시 중복 PR 방지
+- [x] Argo CD를 원격 GitOps 저장소에 연결하고 새 이미지 digest 반영 검증
+- [x] sandbox 이미지 digest 변경 PR 단계와 동일 요청의 열린 PR 재사용 구현 및 테스트
+- [ ] 실제 Jenkins에서 배포 설정 PR 생성 → 병합 → Argo CD 자동 동기화 검증
 
 완료 기준: 실제 서비스 하나를 이 라이브러리의 빌드 산출물로 sandbox에 배포합니다.
 
