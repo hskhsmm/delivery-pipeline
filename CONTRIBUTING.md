@@ -9,8 +9,8 @@ JDK 21에서 다음 명령을 실행합니다. 로컬과 CI에서 같은 Gradle 
 git diff --check
 ```
 
-설정 옵션을 바꿀 때는 `ServiceConfig`·`DeployOptions`, 테스트, `docs/reference.md`와 YAML 예제를 함께 수정합니다.
-공개 진입점의 조합은 `vars/`에, 설정 검증과 공통 Verify 구현은 `src/`에 유지합니다.
+설정 옵션을 바꿀 때는 `vars/deploy.groovy`의 검증 메서드, 테스트, `docs/reference.md`와 YAML 예제를 함께 수정합니다.
+공통 Groovy 구현은 `vars/deploy.groovy`에 모으고, 기존 `servicePipeline(...)` 호출은 그 구현으로 위임합니다.
 Groovy 2.4와 Jenkins CPS에서 동작하는 문법을 사용합니다.
 실제 Jenkins에서의 동작 확인은 단위 테스트와 별도로 기록합니다.
 테스트 하네스는 Jenkins 실행을 대체하며 실제 YAML 파싱은 test 의존성인 SnakeYAML로 확인합니다.

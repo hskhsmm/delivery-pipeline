@@ -42,9 +42,9 @@ Docker Hub 이미지 + published-image.json (이미지 digest와 소스 커밋)
 
 | 설계 결정 | 코드에서 적용한 방식 |
 | --- | --- |
-| 서비스 설정과 공통 정책 분리 | [deploy()](vars/deploy.groovy)가 에이전트를 할당한 뒤 한 번만 체크아웃합니다. 같은 작업 공간에서 [YAML 설정](src/dev/delivery/ServiceConfig.groovy)을 읽고 필수값, 타입, 지원하지 않는 키를 검사합니다. |
-| 실패 지점과 실행 범위 명확화 | 체크아웃·설정 읽기와 빌드에 각각 제한 시간을 둡니다. [Gradle Verify](src/dev/delivery/GradleBuild.groovy)는 `buildEnv`를 빌드 명령에만 적용합니다. Verify에서 실패하면 발행 단계에 진입하지 않습니다. |
-| 자격 증명 사용 범위 제한 | [이미지 발행 단계](src/dev/delivery/ImagePublisher.groovy)가 Jenkins 자격 증명을 발행 셸에만 연결합니다. [발행 스크립트](resources/dev/delivery/publish-image.sh)는 빌드 컨텍스트 밖에 임시 Docker 설정을 만들고 종료 시 삭제합니다. |
+| 서비스 설정과 공통 정책 분리 | [deploy()](vars/deploy.groovy)가 에이전트를 할당한 뒤 한 번만 체크아웃합니다. 같은 작업 공간에서 [YAML 설정](vars/deploy.groovy)을 읽고 필수값, 타입, 지원하지 않는 키를 검사합니다. |
+| 실패 지점과 실행 범위 명확화 | 체크아웃·설정 읽기와 빌드에 각각 제한 시간을 둡니다. [Gradle Verify](vars/deploy.groovy)는 `buildEnv`를 빌드 명령에만 적용합니다. Verify에서 실패하면 발행 단계에 진입하지 않습니다. |
+| 자격 증명 사용 범위 제한 | [이미지 발행 단계](vars/deploy.groovy)가 Jenkins 자격 증명을 발행 셸에만 연결합니다. [발행 스크립트](resources/dev/delivery/publish-image.sh)는 빌드 컨텍스트 밖에 임시 Docker 설정을 만들고 종료 시 삭제합니다. |
 | 소스와 배포할 이미지 연결 | 소스 커밋 SHA를 이미지 태그에 넣고, Buildx가 반환한 digest를 검증한 뒤 `published-image.json`에 이미지 참조와 소스 커밋을 기록합니다. |
 
 처음에는 설정 검증과 단계 순서를 테스트 하네스로 확인했습니다. 실제 Jenkins로 옮기자 설정 객체 생성에서 Groovy CPS 실행 방식과 샌드박스의 제약이 드러났습니다. 검증을 팩터리 메서드로 옮기고 생성자에는 필드 대입만 남겼으며, 직접 생성하던 컬렉션을 Groovy 리터럴로 바꿔 샌드박스 승인 추가 없이 실행했습니다. [CPS 수정](https://github.com/hskhsmm/delivery-pipeline/commit/a7f9d3f) · [샌드박스 수정](https://github.com/hskhsmm/delivery-pipeline/commit/05e6d08) · [Jenkins CPS 레퍼런스](https://www.jenkins.io/doc/book/pipeline/cps-method-mismatches/)
@@ -87,8 +87,8 @@ JDK 21과 저장소에 포함된 Gradle Wrapper를 사용합니다. 아래 명�
 
 | 위치 | 역할 |
 | --- | --- |
-| [`vars/`](vars/) | Jenkins 공개 진입점 `deploy()`, `servicePipeline(...)` |
-| [`src/dev/delivery/`](src/dev/delivery/) | 설정 검증, Gradle 빌드, 이미지 발행 |
+| [`vars/deploy.groovy`](vars/deploy.groovy) | `deploy()` 진입점, 설정 검증, Gradle 빌드, 이미지 발행 |
+| [`vars/servicePipeline.groovy`](vars/servicePipeline.groovy) | 기존 Map 호출을 공통 구현으로 전달 |
 | [`resources/dev/delivery/`](resources/dev/delivery/) | Docker Buildx 발행 스크립트 |
 | [`test/`](test/) | Jenkins 스텝 하네스, 실제 YAML 파싱, 발행 실패 및 인증 파일 정리 테스트 |
 | [`examples/gradle/`](examples/gradle/) | Java 샘플, Jenkinsfile, 서비스 YAML, Dockerfile |

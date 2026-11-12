@@ -81,4 +81,4 @@ servicePipeline(
 
 설정은 YAML의 `serviceName`, `timeoutMinutes`, `buildEnv`와 호출 옵션의 `agentLabel`을 합친 형태입니다.
 기존 호출에서는 모든 설정을 에이전트 할당 전에 검증하고, 단일 timeout이 Checkout과 Verify를 감쌉니다.
-실제 Verify는 `deploy()`와 동일한 `GradleBuild`를 사용합니다.
+두 진입점은 `vars/deploy.groovy`의 같은 Verify 메서드를 사용합니다.
