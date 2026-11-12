@@ -15,6 +15,9 @@ class PipelineHarness {
     boolean failBuild = false
     boolean failPublish = false
     String revision = 'a' * 40
+    String gitBranch = 'origin/main'
+    final Map<String, String> jobEnvironment = [:]
+    final Map<String, String> gitOpsFiles = [:]
     String publishMetadata = '{"containerimage.digest":"sha256:' + ('b' * 64) + '"}'
 
     PipelineHarness(Map<String, String> files = ['jenkins.yml': new File('test/fixtures/jenkins.yml').text]) {
@@ -24,6 +27,7 @@ class PipelineHarness {
     Script load(String entrypoint) {
         Binding binding = new Binding([
             scm: [name: 'service-repository'],
+            env: jobEnvironment,
             node: { String label, Closure body ->
                 events << [type: 'node', label: label]
                 body.call()
@@ -44,7 +48,7 @@ class PipelineHarness {
                 events << [type: 'checkout', scm: scm]
                 if (failCheckout) throw new IllegalStateException('checkout failed')
                 workspace.putAll(sourceFiles)
-                [GIT_COMMIT: revision]
+                [GIT_COMMIT: revision, GIT_BRANCH: gitBranch]
             },
             fileExists: { String path ->
                 events << [type: 'fileExists', path: path]
@@ -55,8 +59,16 @@ class PipelineHarness {
                 LoaderOptions loader = new LoaderOptions()
                 loader.codePointLimit = options.codePointLimit
                 loader.maxAliasesForCollections = options.maxAliasesForCollections
-                List documents = new Yaml(new SafeConstructor(loader)).loadAll(workspace[options.file]).toList()
+                String source = options.containsKey('text') ? options.text : workspace[options.file]
+                List documents = new Yaml(new SafeConstructor(loader)).loadAll(source).toList()
                 documents.size() == 1 ? documents[0] : documents
+            },
+            pwd: { Map options -> 'workspace@tmp' },
+            dir: { String path, Closure body -> body.call() },
+            readFile: { Map options -> workspace[options.file] },
+            writeFile: { Map options ->
+                workspace[options.file] = options.text
+                events << [type: 'writeFile', options: options]
             },
             withEnv: { List<String> overrides, Closure body ->
                 events << [type: 'withEnv', overrides: overrides]
@@ -76,6 +88,10 @@ class PipelineHarness {
             echo: { String message -> events << [type: 'echo', message: message] },
             sh: { Map options ->
                 events << [type: 'sh', options: options, environment: new LinkedHashMap(environment)]
+                if (environment.DELIVERY_GITOPS_ACTION == 'checkout') {
+                    workspace.putAll(gitOpsFiles)
+                    return
+                }
                 if (options.returnStdout) {
                     if (failPublish) throw new IllegalStateException('publish failed')
                     return publishMetadata
@@ -84,6 +100,7 @@ class PipelineHarness {
             },
             libraryResource: { String path -> new File("resources/${path}").text },
             usernamePassword: { Map options -> options },
+            string: { Map options -> options },
             withCredentials: { List bindings, Closure body ->
                 events << [type: 'withCredentials', bindings: bindings]
                 body.call()

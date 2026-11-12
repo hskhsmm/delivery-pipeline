@@ -6,11 +6,14 @@ def call(Map options = [:]) {
     node(bootstrap.agentLabel) {
         Map config
         String revision
+        String branch
         timeout(time: bootstrap.checkoutTimeoutMinutes, unit: 'MINUTES') {
             stage('Checkout') {
                 // 이전 빌드의 설정을 재사용하지 않고 이번 SCM 체크아웃에서 다시 읽는다.
                 deleteDir()
-                revision = checkout(scm)?.GIT_COMMIT
+                Map checkedOut = checkout(scm)
+                revision = checkedOut?.GIT_COMMIT
+                branch = checkedOut?.GIT_BRANCH
             }
             stage('Configure') {
                 if (!fileExists(bootstrap.configFile)) {
@@ -32,7 +35,14 @@ def call(Map options = [:]) {
             runGradle(config)
         }
         if (config.image != null) {
-            publishImage(config.image, revision)
+            if (config.gitOps != null && !isMainBuild(branch)) {
+                echo 'Skipping image publishing and GitOps PR for a non-main build'
+                return
+            }
+            String image = publishImage(config.image, revision)
+            if (config.gitOps != null) {
+                updateGitOps(config, image, revision)
+            }
         }
     }
 }
@@ -63,7 +73,8 @@ private void runGradle(Map config) {
     }
 }
 
-private void publishImage(Map config, String revision) {
+private String publishImage(Map config, String revision) {
+    String reference
     stage('Publish Image') {
         timeout(time: 30, unit: 'MINUTES') {
             if (!(revision ==~ /[a-f0-9]{40}/)) {
@@ -90,7 +101,7 @@ private void publishImage(Map config, String revision) {
             if (!(digest instanceof String) || !(digest ==~ /sha256:[a-f0-9]{64}/)) {
                 error('Docker Buildx did not return a valid published image digest')
             }
-            String reference = config.repository + '@' + digest
+            reference = config.repository + '@' + digest
             // 푸시와 digest 검증이 모두 끝난 뒤에만 발행 결과를 보관한다.
             writeJSON(file: 'published-image.json', json: [
                 image: reference, tag: tag, digest: digest, sourceRevision: revision
@@ -99,6 +110,94 @@ private void publishImage(Map config, String revision) {
             echo "Published image: ${reference}"
         }
     }
+    return reference
+}
+
+private boolean isMainBuild(String branch) {
+    if (env.CHANGE_ID) {
+        return false
+    }
+    return env.BRANCH_NAME ? env.BRANCH_NAME == 'main' :
+        branch in ['main', 'origin/main', 'refs/heads/main', 'refs/remotes/origin/main']
+}
+
+private void updateGitOps(Map config, String image, String revision) {
+    stage('Open GitOps PR') {
+        timeout(time: 10, unit: 'MINUTES') {
+            String script = libraryResource('dev/delivery/gitops-pr.sh')
+            // 서비스 소스와 별도로 GitOps 레포를 체크아웃한다.
+            dir(pwd(tmp: true) + '/delivery-gitops') {
+                deleteDir()
+                try {
+                    withEnv([
+                        'DELIVERY_GITOPS_REPO=' + config.gitOps.repository,
+                        'DELIVERY_GITOPS_MANIFEST=' + config.gitOps.manifest,
+                        'DELIVERY_GITOPS_SERVICE=' + config.serviceName,
+                        'DELIVERY_GITOPS_IMAGE=' + image,
+                        'DELIVERY_GITOPS_REVISION=' + revision,
+                        'GH_HOST=github.com', 'GH_PROMPT_DISABLED=1', 'GIT_TERMINAL_PROMPT=0'
+                    ]) {
+                        withCredentials([string(credentialsId: config.gitOps.credentialsId, variable: 'GH_TOKEN')]) {
+                            withEnv(['DELIVERY_GITOPS_ACTION=checkout']) {
+                                sh(label: 'Check out GitOps main', script: script)
+                            }
+                            if (updateGitOpsManifest(config.gitOps.manifest, config.serviceName, image)) {
+                                withEnv(['DELIVERY_GITOPS_ACTION=open']) {
+                                    sh(label: 'Open or reuse GitOps pull request', script: script)
+                                }
+                            } else {
+                                echo 'GitOps main already references the published image'
+                            }
+                        }
+                    }
+                } finally {
+                    deleteDir()
+                }
+            }
+        }
+    }
+}
+
+private boolean updateGitOpsManifest(String file, String serviceName, String image) {
+    String before = readFile(file: file)
+    Object manifest = readYaml(text: before, codePointLimit: 65536, maxAliasesForCollections: 20)
+    if (!(manifest instanceof Map) || manifest.apiVersion != 'apps/v1' ||
+        manifest.kind != 'Deployment' || manifest.metadata?.name != serviceName) {
+        error('GitOps manifest must contain one apps/v1 Deployment named serviceName')
+    }
+    Object containers = manifest.spec?.template?.spec?.containers
+    if (!(containers instanceof List)) {
+        error('GitOps Deployment must define a container list')
+    }
+    Map container
+    for (Object entry : containers) {
+        if (entry instanceof Map && entry.name == serviceName) {
+            if (container != null) {
+                error('GitOps Deployment must have only one container named serviceName')
+            }
+            container = entry
+        }
+    }
+    Object previous = container?.image
+    if (!(previous instanceof String) || ((String) previous).trim().isEmpty()) {
+        error('GitOps Deployment must define an image for the container named serviceName')
+    }
+    if (previous == image) {
+        return false
+    }
+    // 원본 서식을 보존하고, YAML을 다시 읽어 대상 image만 달라졌는지 확인한다.
+    int start = before.indexOf((String) previous)
+    if (start < 0 || start != before.lastIndexOf((String) previous)) {
+        error('GitOps manifest must contain the current image as a unique literal')
+    }
+    String after = before.substring(0, start) + image + before.substring(start + ((String) previous).length())
+    Object updated = readYaml(text: after, codePointLimit: 65536, maxAliasesForCollections: 20)
+    container.image = image
+    if (updated != manifest) {
+        error('GitOps update must only change the target container image')
+    }
+    writeFile(file: file, text: after)
+    return true
 }
 
 private Map deployOptions(Map<String, ?> options) {
@@ -107,16 +206,19 @@ private Map deployOptions(Map<String, ?> options) {
     String configFile = text(options, 'configFile', 'jenkins.yml')
     int checkoutTimeoutMinutes = minutes(options, 'checkoutTimeoutMinutes', 10)
 
-    // 파일 경로는 체크아웃한 저장소를 기준으로 한 상대 경로만 받는다.
-    for (String segment : configFile.split('/', -1)) {
-        if (!(segment ==~ /[A-Za-z0-9._-]+/) || segment == '.' || segment == '..') {
-            throw new IllegalArgumentException('configFile must be a relative repository path without . or .. segments')
-        }
-    }
+    checkRelativePath(configFile, 'configFile')
     return [agentLabel: agentLabel, configFile: configFile, checkoutTimeoutMinutes: checkoutTimeoutMinutes]
 }
 
-private Map serviceConfig(Map<String, ?> options, Map image = null) {
+private void checkRelativePath(String path, String key) {
+    for (String segment : path.split('/', -1)) {
+        if (!(segment ==~ /[A-Za-z0-9._-]+/) || segment == '.' || segment == '..') {
+            throw new IllegalArgumentException("${key} must be a relative repository path without . or .. segments")
+        }
+    }
+}
+
+private Map serviceConfig(Map<String, ?> options, Map image = null, Map gitOps = null) {
     knownKeys(options, ['serviceName', 'agentLabel', 'timeoutMinutes', 'buildEnv'])
     String serviceName = text(options, 'serviceName', null)
     if (!(serviceName ==~ /[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?/)) {
@@ -125,7 +227,8 @@ private Map serviceConfig(Map<String, ?> options, Map image = null) {
     String agentLabel = text(options, 'agentLabel', 'java')
     int timeoutMinutes = minutes(options, 'timeoutMinutes', 30)
     Map<String, String> buildEnv = environment(options.containsKey('buildEnv') ? options.get('buildEnv') : [:])
-    return [serviceName: serviceName, agentLabel: agentLabel, timeoutMinutes: timeoutMinutes, buildEnv: buildEnv, image: image]
+    return [serviceName: serviceName, agentLabel: agentLabel, timeoutMinutes: timeoutMinutes,
+        buildEnv: buildEnv, image: image, gitOps: gitOps]
 }
 
 private Map serviceConfigFromYaml(Object document, String agentLabel) {
@@ -147,7 +250,11 @@ private Map serviceConfigFromYaml(Object document, String agentLabel) {
     }
     normalized.put('agentLabel', agentLabel)
     Map image = normalized.containsKey('image') ? imageConfig(normalized.remove('image')) : null
-    return serviceConfig(normalized, image)
+    Map gitOps = normalized.containsKey('gitOps') ? gitOpsConfig(normalized.remove('gitOps')) : null
+    if (gitOps != null && image == null) {
+        throw new IllegalArgumentException('gitOps requires image publishing to be configured')
+    }
+    return serviceConfig(normalized, image, gitOps)
 }
 
 private List<String> environmentOverrides(Map<String, String> buildEnv) {
@@ -192,6 +299,25 @@ private Map imageConfig(Object raw) {
     }
     String repository = name.startsWith('docker.io/') ? name : 'docker.io/' + name
     return [repository: repository, credentialsId: text(options, 'credentialsId', null)]
+}
+
+private Map gitOpsConfig(Object raw) {
+    if (!(raw instanceof Map)) {
+        throw new IllegalArgumentException('gitOps must be a mapping')
+    }
+    Map<?, ?> options = (Map<?, ?>) raw
+    knownKeys(options, ['repository', 'manifest', 'credentialsId'])
+    String repository = text(options, 'repository', null)
+    if (!(repository ==~ /[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_][A-Za-z0-9._-]{0,99}/) ||
+        repository.endsWith('.git')) {
+        throw new IllegalArgumentException('gitOps.repository must be a GitHub owner/repository')
+    }
+    String manifest = text(options, 'manifest', null)
+    checkRelativePath(manifest, 'gitOps.manifest')
+    if (!manifest.endsWith('.yaml') && !manifest.endsWith('.yml')) {
+        throw new IllegalArgumentException('gitOps.manifest must be a YAML file')
+    }
+    return [repository: repository, manifest: manifest, credentialsId: text(options, 'credentialsId', null)]
 }
 
 private void knownKeys(Map<?, ?> options, List<String> allowed) {
