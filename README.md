@@ -103,6 +103,8 @@ JDK 21과 저장소에 포함된 Gradle Wrapper를 사용합니다. 아래 명�
 
 [아키텍처와 설계 결정](docs/architecture.md) · [기여와 커밋 규칙](CONTRIBUTING.md)
 
+[코드로 따라가는 GitOps와 테스트 하네스](docs/gitops-walkthrough.md)
+
 ## 다음 단계
 
 1. **자동 배포 흐름 검증.** 실제 Jenkins에서 GitOps PR을 생성하고, 병합한 뒤 Argo CD 동기화와 새 Pod의 `/health` 응답을 확인합니다.
