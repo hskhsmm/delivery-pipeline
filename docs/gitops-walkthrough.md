@@ -96,7 +96,7 @@ Argo CD가 Kubernetes에 새 Deployment 설정을 반영하면, Deployment의 Po
 
 실제 검증은 두 번에 나눠 진행했습니다. 먼저 로컬 Git 저장소로 Argo CD가 새 이미지를 띄우는지 확인했습니다. 그다음 Jenkins #4가 서비스 커밋 `f626f72`를 빌드해 발행한 digest를 비공개 GitHub GitOps 저장소의 `aff3ae3` 커밋에 **직접 기록**했습니다. Argo CD가 그 커밋으로 자동 동기화했고 `Synced`·`Healthy`, Kubernetes 롤아웃 성공, 서비스 `/health`의 `200 OK`를 확인했습니다. `aff3ae3`는 **배포 설정 커밋**이므로 소스 커밋 `f626f72`와 서로 다른 기록입니다. [README의 검증 기록](../README.md#현재-어디까지-되었나요)
 
-이 수동 검증으로 이미지 발행과 Git 변경 이후의 배포를 먼저 확인했고, 같은 한 줄 변경을 Jenkins가 PR로 제안하는 코드를 추가했습니다. **실제 Jenkins에서 자동 생성한 PR의 병합부터 Argo CD 배포까지 이어지는 한 번의 실행**은 GitHub 쓰기 토큰 연결 후 확인할 단계입니다.
+이 수동 검증으로 이미지 발행과 Git 변경 이후의 배포를 먼저 확인했고, 같은 한 줄 변경을 Jenkins가 PR로 제안하는 코드를 추가했습니다. GitHub 쓰기 토큰을 연결한 후 실제 Jenkins 빌드 #5는 서비스 커밋 `0748acc`로 발행한 이미지의 digest `918b73f…`를 GitOps PR #1에 기록했습니다. PR에서 이미지 한 줄만 바뀐 것을 확인해 병합했고, Argo CD가 병합 커밋 `9c4d3b2`를 자동 동기화했습니다. 마지막으로 Deployment 이미지가 빌드 #5의 발행 digest와 일치하고 서비스의 `/health`가 `200 OK`인지 확인했습니다. [최종 실행 결과](../README.md#현재-어디까지-되었나요)
 
 ### 단계별로 검증해서 찾은 문제
 
@@ -144,4 +144,4 @@ assertEquals(['hub-publisher'], harness.events.findAll { it.type == 'withCredent
 
 면접에서 한 문장으로 정리하면 이렇게 말할 수 있습니다.
 
-> Gradle 서비스가 재사용하는 Jenkins Shared Library를 만들고, 발행한 이미지 digest로 GitOps 배포 변경을 제안하도록 구현했습니다. 테스트 하네스로 발행 실패와 PR 재시도를 재현했고, 원격 Git 변경이 Argo CD를 통해 로컬 Kubernetes에 반영되는 것까지 검증했습니다.
+> Gradle 서비스가 재사용하는 Jenkins Shared Library를 만들고, 발행한 이미지 digest로 GitOps 배포 PR을 자동 생성했습니다. 하네스로 발행 실패와 PR 재시도를 재현했고, 실제 Jenkins에서 PR을 열어 병합한 뒤 Argo CD가 동일한 이미지로 로컬 Kubernetes에 배포하는 것까지 검증했습니다.

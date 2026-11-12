@@ -8,20 +8,24 @@
 
 ## 현재 어디까지 되었나요?
 
-**GitHub에서 Java 서비스 소스를 받아 Docker Hub에 발행하고, Argo CD가 GitHub의 배포 설정을 읽어 로컬 Kubernetes의 배포를 갱신하는 것까지 검증했습니다.** 이번 원격 배포에서는 Jenkins가 남긴 `published-image.json`의 digest를 GitOps 저장소에 직접 커밋했습니다. 검증 환경은 `linux/arm64`입니다.
+**Jenkins의 이미지 발행과 GitOps PR 자동 생성부터, PR 병합 후 Argo CD가 Kubernetes에 새 이미지를 배포하는 것까지 검증했습니다.** GitHub의 Java 데모 서비스와 전용 kind 클러스터 `delivery-sandbox`를 사용했습니다. 검증 환경은 `linux/arm64`입니다.
 
 | 확인한 범위 | 검증 방법과 결과 |
 | --- | --- |
-| 공유 라이브러리 | YAML 검증, 단계 순서, 발행 실패 처리, 배포 PR 생성·재시도를 Gradle 테스트로 검증합니다. [GitHub Actions](https://github.com/hskhsmm/delivery-pipeline/actions/workflows/ci.yml) |
-| 실제 Jenkins | 비공개 Java 서비스 커밋 `f626f72`를 GitHub에서 직접 체크아웃. `Checkout → Configure → Verify → Publish Image` 성공 및 `published-image.json` 보관. |
-| 원격 이미지 | Jenkins가 서비스 커밋 SHA로 태그를 만들고, 발행한 이미지의 digest와 `sourceRevision`을 아티팩트에 기록. 공개 이미지 저장소에서 digest로 내려받을 수 있습니다. [Docker Hub 이미지 저장소](https://hub.docker.com/repository/docker/smini/delivery-pipeline-demo) |
-| 로컬 GitOps 재배포 | 전용 kind 클러스터 `delivery-sandbox`에서 Argo CD가 새 digest를 담은 로컬 GitOps 커밋 `c03c382`로 동기화. `Synced`·`Healthy`, 새 Pod의 이미지 pull 이벤트, Service의 `/health` 응답 `200 OK` 확인. |
-| 원격 GitOps 재배포 | Argo CD가 비공개 GitHub 저장소의 커밋 `aff3ae3`를 자동 동기화. `Synced`·`Healthy`와 Service의 `/health` 응답 `200 OK` 확인. |
-| GitOps PR 자동화 | 선택형 단계 구현. Jenkins 단계는 하네스로, 브랜치 생성과 재시도는 로컬 Git과 GitHub API 대역으로 검증했습니다. 실제 Jenkins의 GitHub 쓰기 자격 증명 연결과 PR 병합 검증이 남아 있습니다. |
+| 공유 라이브러리 | YAML 검증, 단계 순서, 발행 실패 처리, 배포 PR 생성·재시도를 Gradle 테스트 49개로 검증했습니다. [GitHub Actions](https://github.com/hskhsmm/delivery-pipeline/actions/workflows/ci.yml) |
+| Jenkins 빌드 #5 | Java 서비스 커밋 `0748acc` 체크아웃 → Gradle 검증 → Docker Hub 발행 → `published-image.json` 보관 → `Open GitOps PR` 성공. |
+| GitOps PR #1 | Jenkins가 `apps/delivery-demo/deployment.yaml`의 `image` 한 줄을 바꾸는 PR을 열었습니다. 아티팩트와 PR의 digest가 같은 것을 확인하고 검토 후 병합했습니다. |
+| Argo CD와 Kubernetes | GitOps 병합 커밋 `9c4d3b2`가 자동 동기화됐습니다. `Synced`·`Healthy`, Deployment 롤아웃 성공, 발행한 이미지 digest 일치, `/health`의 `200 OK`와 `ok`를 확인했습니다. |
+
+<img src="docs/images/jenkins-build-5.png" width="302" alt="Jenkins 빌드 목록에서 5번 빌드가 성공한 화면">
+
+*GitOps PR을 처음 자동 생성한 Jenkins 빌드 #5의 실행 결과입니다.*
+
+초기에는 GitOps 파일을 직접 커밋해 Argo CD부터 확인했습니다. 아래 화면은 로컬 GitOps 커밋 `c03c382`가 동기화된 초기 검증입니다. 이후 비공개 GitHub 저장소로 옮겨 커밋 `aff3ae3`로 재배포했고, 최종 검증에서 Jenkins가 PR을 만드는 단계까지 연결했습니다.
 
 ![Argo CD에서 delivery-demo가 Healthy이고 GitOps 커밋 c03c382에 동기화된 화면](docs/images/argocd-delivery-demo.jpg)
 
-*Argo CD에서 GitOps 커밋 `c03c382`의 동기화 성공과 새 Pod의 실행 상태를 확인했습니다. 커밋 작성자 정보는 가렸습니다.*
+*초기 검증의 Argo CD 동기화 상태와 새 Pod입니다. 커밋 작성자 정보는 가렸습니다.*
 
 ### 발행된 데모 실행
 
@@ -29,7 +33,7 @@
 
 ```sh
 docker run --rm -p 127.0.0.1:18080:8080 \
-  docker.io/smini/delivery-pipeline-demo@sha256:33eef84e8c41ac26054eee2dd22b9e80abc940ed5528ee73317b113903b90d5e
+  docker.io/smini/delivery-pipeline-demo@sha256:918b73fcd6ab1761dfe28dc7c36d62abdb005fed8198375c65f7971f900e7a6e
 ```
 
 다른 터미널에서 `curl -i http://127.0.0.1:18080/health`를 실행하면 `200 OK`와 `ok`가 표시됩니다. 공개 이미지는 로컬 발행 검증용 경량 Dockerfile로 만들었습니다. 같은 Dockerfile을 별도 Java 테스트 서비스 저장소에 담았고, 이 라이브러리 저장소의 [기본 예제](examples/gradle/Dockerfile)는 일반 JRE 이미지로 시작합니다.
@@ -105,9 +109,8 @@ JDK 21과 저장소에 포함된 Gradle Wrapper를 사용합니다. 아래 명�
 
 [코드로 따라가는 GitOps와 테스트 하네스](docs/gitops-walkthrough.md)
 
-## 다음 단계
+## 후속 로드맵
 
-1. **자동 배포 흐름 검증.** 실제 Jenkins에서 GitOps PR을 생성하고, 병합한 뒤 Argo CD 동기화와 새 Pod의 `/health` 응답을 확인합니다.
-2. **재사용 범위 검증.** 별도 Kotlin Gradle 서비스에서도 같은 진입점으로 발행하고, `amd64` 환경의 이미지 빌드와 실행을 검증합니다. 환경별 차이가 생기면 Kustomize로 공통 YAML과 환경별 설정을 분리하는 방식을 검토합니다.
+별도 Kotlin Gradle 서비스와 `amd64` 환경에서 같은 라이브러리를 검증합니다. 환경별 설정 차이가 생기면 Kustomize를 검토합니다.
 
 [상세 로드맵](docs/roadmap.md) · [Argo CD의 CI 연동 방식](https://argo-cd.readthedocs.io/en/stable/user-guide/ci_automation/)

@@ -35,7 +35,7 @@
 - [x] GitHub에서 직접 체크아웃해 발행한 이미지로 샌드박스의 기존 배포 갱신 검증
 - [x] Argo CD를 원격 GitOps 저장소에 연결하고 새 이미지 digest 반영 검증
 - [x] sandbox 이미지 digest 변경 PR 단계와 동일 요청의 열린 PR 재사용 구현 및 테스트
-- [ ] 실제 Jenkins에서 배포 설정 PR 생성 → 병합 → Argo CD 자동 동기화 검증
+- [x] 실제 Jenkins #5에서 배포 설정 PR #1 생성 → 병합 → Argo CD 자동 동기화 → 이미지 digest와 `/health` 검증
 
 완료 기준: 실제 서비스 하나를 이 라이브러리의 빌드 산출물로 sandbox에 배포합니다.
 
