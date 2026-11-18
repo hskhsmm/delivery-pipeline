@@ -104,3 +104,11 @@ servicePipeline(
 설정은 YAML의 `serviceName`, `timeoutMinutes`, `buildEnv`와 호출 옵션의 `agentLabel`을 합친 형태입니다.
 기존 호출에서는 모든 설정을 에이전트 할당 전에 검증하고, 단일 timeout이 Checkout과 Verify를 감쌉니다.
 두 진입점은 `vars/deploy.groovy`의 같은 Verify 메서드를 사용합니다.
+
+## 배포를 구별하는 releaseName
+
+`jenkins.yml`에 선택 항목 `releaseName: shipping-ui-v2`를 지정하면 Jenkins 빌드 이름에 서비스명과 릴리스명이 표시됩니다. 영문·숫자로 시작하고 영문·숫자·점·밑줄·하이픈으로 최대 80자를 사용합니다. 생략하면 소스 커밋 앞 7자리를 사용하므로 기존 설정도 동작합니다.
+
+GitOps PR과 커밋 제목은 `deploy: delivery-demo · shipping-ui-v2 · Jenkins #8` 형식입니다. 본문에는 이미지 digest, 전체 소스 커밋, 릴리스명, Jenkins 빌드 URL을 기록합니다. 같은 이미지의 열린 PR은 기존처럼 재사용합니다. Squash 병합 시 최종 커밋 제목을 확인하면 Argo CD 상단에서 같은 릴리스명을 볼 수 있습니다.
+
+이 값은 배포 설명용 이름입니다. 서비스 화면의 `/version`과 맞추려면 서비스 버전을 바꿀 때 `releaseName`도 함께 수정합니다. 정확한 이미지 확인은 digest로 진행합니다. Deployment 이름과 Pod 라벨의 자동 변경은 이번 범위에 포함하지 않았습니다.
