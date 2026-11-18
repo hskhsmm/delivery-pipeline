@@ -37,6 +37,7 @@ case "$3" in
         ;;
     POST)
         test ! -f "$PR_STATE"
+        test "${10}" = 'title=deploy: api · shipping-ui-v2 · Jenkins #8'
         test "$7" = -f
         case "$8" in
             head=delivery/api/*) ;;
@@ -57,6 +58,8 @@ esac
             DELIVERY_GITOPS_SERVICE: 'api',
             DELIVERY_GITOPS_IMAGE: image,
             DELIVERY_GITOPS_REVISION: 'a' * 40,
+            DELIVERY_GITOPS_RELEASE: 'shipping-ui-v2',
+            DELIVERY_BUILD_NUMBER: '8',
             GH_TOKEN: 'stub-secret',
             PR_STATE: new File(temp.root, 'pr-state').absolutePath,
             REMOTE: remote.absolutePath,
@@ -72,6 +75,7 @@ esac
         assertTrue(shell(first, environment, 'open').contains('/pull/1'))
         String branch = checked(remote, 'git', 'branch', '--list', 'delivery/api/*', '--format=%(refname:short)').trim()
         String head = checked(remote, 'git', 'rev-parse', branch)
+        assertEquals('deploy: api · shipping-ui-v2 · Jenkins #8', checked(remote, 'git', 'log', '-1', '--format=%s', branch).trim())
         assertEquals('deployment.yaml', checked(remote, 'git', 'diff', '--name-only', 'main', branch).trim())
         assertEquals("image: ${image}\n".toString(), checked(remote, 'git', 'show', "${branch}:deployment.yaml"))
 
