@@ -16,6 +16,7 @@ class PipelineHarness {
     boolean failPublish = false
     String revision = 'a' * 40
     String gitBranch = 'origin/main'
+    final Map build = [:]
     final Map<String, String> jobEnvironment = [:]
     final Map<String, String> gitOpsFiles = [:]
     String publishMetadata = '{"containerimage.digest":"sha256:' + ('b' * 64) + '"}'
@@ -26,6 +27,7 @@ class PipelineHarness {
 
     Script load(String entrypoint) {
         Binding binding = new Binding([
+            currentBuild: build,
             scm: [name: 'service-repository'],
             env: jobEnvironment,
             node: { String label, Closure body ->

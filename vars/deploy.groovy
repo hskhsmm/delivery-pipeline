@@ -27,6 +27,9 @@ def call(Map options = [:]) {
                     maxAliasesForCollections: 20
                 )
                 config = serviceConfigFromYaml(document, bootstrap.agentLabel)
+                // 사람이 읽는 릴리스명과 정확한 소스 커밋을 함께 표시한다.
+                currentBuild.displayName = '#' + (env.BUILD_NUMBER ?: 'local') + ' · ' +
+                    config.serviceName + ' · ' + (config.releaseName ?: revision?.take(7) ?: 'unknown')
             }
         }
 
@@ -135,6 +138,9 @@ private void updateGitOps(Map config, String image, String revision) {
                         'DELIVERY_GITOPS_SERVICE=' + config.serviceName,
                         'DELIVERY_GITOPS_IMAGE=' + image,
                         'DELIVERY_GITOPS_REVISION=' + revision,
+                        'DELIVERY_GITOPS_RELEASE=' + (config.releaseName ?: revision?.take(7) ?: 'unknown'),
+                        'DELIVERY_BUILD_NUMBER=' + (env.BUILD_NUMBER ?: ''),
+                        'DELIVERY_BUILD_URL=' + (env.BUILD_URL ?: ''),
                         'GH_HOST=github.com', 'GH_PROMPT_DISABLED=1', 'GIT_TERMINAL_PROMPT=0'
                     ]) {
                         withCredentials([string(credentialsId: config.gitOps.credentialsId, variable: 'GH_TOKEN')]) {
@@ -219,7 +225,7 @@ private void checkRelativePath(String path, String key) {
 }
 
 private Map serviceConfig(Map<String, ?> options, Map image = null, Map gitOps = null) {
-    knownKeys(options, ['serviceName', 'agentLabel', 'timeoutMinutes', 'buildEnv'])
+    knownKeys(options, ['serviceName', 'agentLabel', 'timeoutMinutes', 'buildEnv', 'releaseName'])
     String serviceName = text(options, 'serviceName', null)
     if (!(serviceName ==~ /[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?/)) {
         throw new IllegalArgumentException('serviceName must be a lowercase DNS label of 1–63 characters')
@@ -227,7 +233,11 @@ private Map serviceConfig(Map<String, ?> options, Map image = null, Map gitOps =
     String agentLabel = text(options, 'agentLabel', 'java')
     int timeoutMinutes = minutes(options, 'timeoutMinutes', 30)
     Map<String, String> buildEnv = environment(options.containsKey('buildEnv') ? options.get('buildEnv') : [:])
-    return [serviceName: serviceName, agentLabel: agentLabel, timeoutMinutes: timeoutMinutes,
+    String releaseName = options.containsKey('releaseName') ? text(options, 'releaseName', null) : null
+    if (releaseName && !(releaseName ==~ /[A-Za-z0-9][A-Za-z0-9._-]{0,79}/)) {
+        throw new IllegalArgumentException('releaseName must contain 1–80 ASCII letters, digits, dots, underscores or hyphens')
+    }
+    return [releaseName: releaseName, serviceName: serviceName, agentLabel: agentLabel, timeoutMinutes: timeoutMinutes,
         buildEnv: buildEnv, image: image, gitOps: gitOps]
 }
 

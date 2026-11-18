@@ -5,6 +5,26 @@ import static org.junit.Assert.*
 
 class DeployTest {
     @Test
+    void namesBuildsWithReleaseAndKeepsExistingConfigurationsWorking() {
+        PipelineHarness harness = new PipelineHarness(['jenkins.yml': 'serviceName: api\nreleaseName: shipping-ui-v2\n'])
+        harness.jobEnvironment.BUILD_NUMBER = '8'
+        harness.load('deploy').call()
+        assertEquals('#8 · api · shipping-ui-v2', harness.build.displayName)
+        PipelineHarness legacy = new PipelineHarness()
+        legacy.load('deploy').call()
+        assertTrue(legacy.build.displayName.endsWith(' · aaaaaaa'))
+        for (String value : ['bad release', 'bad\nrelease', 'x' * 81]) {
+            PipelineHarness invalid = new PipelineHarness(['jenkins.yml': "serviceName: api\nreleaseName: '${value}'\n"])
+            try {
+                invalid.load('deploy').call()
+                fail('Invalid release name accepted')
+            } catch (IllegalArgumentException expected) {
+                assertFalse(invalid.events.any { it.type == 'sh' })
+            }
+        }
+    }
+
+    @Test
     void checksOutReadsYamlAndRunsTheSharedGradleStage() {
         PipelineHarness harness = new PipelineHarness()
         harness.load('deploy').call()

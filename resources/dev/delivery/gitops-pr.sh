@@ -10,6 +10,12 @@ fail() {
 command -v gh >/dev/null 2>&1 || fail 'GitOps PRs require GitHub CLI (gh) on the Jenkins agent'
 export GH_NO_UPDATE_NOTIFIER=1
 repository="github.com/$DELIVERY_GITOPS_REPO"
+# 기존 호출에도 기본값을 제공하고 PR과 커밋의 표시를 일치시킨다.
+release="${DELIVERY_GITOPS_RELEASE:-$DELIVERY_GITOPS_REVISION}"
+title="deploy: $DELIVERY_GITOPS_SERVICE · $release"
+if [ -n "${DELIVERY_BUILD_NUMBER:-}" ]; then
+    title="$title · Jenkins #$DELIVERY_BUILD_NUMBER"
+fi
 
 github_git() {
     # GH_TOKEN은 Jenkins가 셸 범위에 주입하며 Git 설정 파일이나 원격 URL에 기록하지 않는다.
@@ -57,7 +63,7 @@ fi
 
 git -c user.name='Delivery Pipeline' -c user.email='delivery-pipeline@users.noreply.github.com' \
     -c core.hooksPath=/dev/null -c commit.gpgSign=false commit \
-    -m "deploy: update $DELIVERY_GITOPS_SERVICE image" -- "$DELIVERY_GITOPS_MANIFEST"
+    -m "$title" -- "$DELIVERY_GITOPS_MANIFEST"
 
 if ! github_git push origin "HEAD:refs/heads/$branch"; then
     # 동시에 실행했거나 이전 실행이 push 직후 중단됐다면, 같은 변경의 브랜치인지 확인한다.
@@ -67,10 +73,14 @@ if ! github_git push origin "HEAD:refs/heads/$branch"; then
 fi
 
 if ! gh api --method POST "repos/$DELIVERY_GITOPS_REPO/pulls" -f base=main -f "head=$branch" \
-    -f "title=Deploy $DELIVERY_GITOPS_SERVICE" \
+    -f "title=$title" \
     -f "body=Image: $DELIVERY_GITOPS_IMAGE
 
-Source revision: $DELIVERY_GITOPS_REVISION" --jq .html_url; then
+Source revision: $DELIVERY_GITOPS_REVISION
+
+Release: $release
+
+Jenkins build: ${DELIVERY_BUILD_URL:-not available}" --jq .html_url; then
     existing=$(existing_pr)
     [ -n "$existing" ] || fail 'Could not create GitOps pull request'
     use_existing "$existing"
